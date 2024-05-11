@@ -5,4 +5,5 @@ pub mod global_properties;
 pub mod partitions;
 pub mod people;
 pub mod person_properties;
+pub mod random;
 pub mod regions;
