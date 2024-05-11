@@ -258,7 +258,7 @@ impl<'a, P: Partition> RegionsPartitionBuilder<'a, P> for PartitionBuilder<'a, P
 #[cfg(test)]
 mod test {
     use crate::context::{Component, Context, Plugin};
-    use crate::data_containers::PropertyWithDefault;
+    use crate::data_containers::{PersonContainer, PropertyWithDefault};
     use crate::partitions::{Partition, PartitionContext};
     use crate::people::PeopleContext;
     use crate::regions::{

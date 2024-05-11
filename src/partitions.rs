@@ -1,7 +1,8 @@
 extern crate rand;
 
 use crate::context::{Context, Plugin};
-use crate::data_containers::person_container::PersonContainer;
+use crate::data_containers::indexset_person_container::IndexSetPersonContainer;
+use crate::data_containers::PersonContainer;
 use crate::people::{PeopleContext, PersonId};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
@@ -36,7 +37,7 @@ pub struct PartitionSpecification<T: Any + Hash + Eq> {
 }
 
 struct PartitionData<T: Any + Hash + Eq> {
-    label_map: HashMap<T, PersonContainer>,
+    label_map: HashMap<T, IndexSetPersonContainer>,
     label_function: Rc<LabelFunction<T>>,
     deregistration_callback: Box<dyn FnOnce(&mut Context)>,
 }
@@ -132,7 +133,10 @@ pub trait PartitionContext {
     fn add_partition<P: Partition>(&mut self) -> PartitionBuilder<P>;
     fn remove_partition<P: Partition>(&mut self);
     fn get_partition_label<P: Partition>(&self, person_id: PersonId) -> P::LabelType;
-    fn get_partition_cell<P: Partition>(&self, label: P::LabelType) -> Option<&PersonContainer>;
+    fn get_partition_cell<P: Partition>(
+        &self,
+        label: P::LabelType,
+    ) -> Option<&IndexSetPersonContainer>;
 }
 
 impl PartitionContext for Context {
@@ -170,7 +174,10 @@ impl PartitionContext for Context {
         }
     }
 
-    fn get_partition_cell<P: Partition>(&self, label: P::LabelType) -> Option<&PersonContainer> {
+    fn get_partition_cell<P: Partition>(
+        &self,
+        label: P::LabelType,
+    ) -> Option<&IndexSetPersonContainer> {
         let data_container = self
             .get_data_container::<PartitionPlugin>()
             .expect("Partition plugin not loaded");
@@ -201,7 +208,7 @@ impl InternalPartitionContext for Context {
         specification: PartitionSpecification<P::LabelType>,
     ) {
         // First build up the map of labels to PersonContainers
-        let mut label_map: HashMap<P::LabelType, PersonContainer> = HashMap::new();
+        let mut label_map: HashMap<P::LabelType, IndexSetPersonContainer> = HashMap::new();
         let maximum_person_id = self.get_maximum_person_id();
         if maximum_person_id.is_some() {
             // If there are people in the simulation, add them to the partition
@@ -210,7 +217,7 @@ impl InternalPartitionContext for Context {
                 let label = (specification.label_function)(self, person_id);
                 label_map
                     .entry(label)
-                    .or_insert(PersonContainer::new())
+                    .or_insert(IndexSetPersonContainer::new())
                     .insert(person_id)
             }
         }
@@ -264,7 +271,7 @@ impl InternalPartitionContext for Context {
                 let new_label_people_container = partition_data
                     .label_map
                     .entry(new_label)
-                    .or_insert(PersonContainer::new());
+                    .or_insert(IndexSetPersonContainer::new());
                 new_label_people_container.insert(person_id);
             }
         }
@@ -293,7 +300,7 @@ impl InternalPartitionContext for Context {
                 let label_people_container = partition_data
                     .label_map
                     .entry(label)
-                    .or_insert_with(PersonContainer::new);
+                    .or_insert_with(IndexSetPersonContainer::new);
                 label_people_container.insert(person_id);
             }
         }
@@ -303,7 +310,7 @@ impl InternalPartitionContext for Context {
 #[cfg(test)]
 mod test {
     use crate::context::Context;
-    use crate::data_containers::PropertyWithDefault;
+    use crate::data_containers::{PersonContainer, PropertyWithDefault};
     use crate::partitions::{Partition, PartitionContext};
     use crate::people::{PeopleContext, PersonId};
     use crate::person_properties::{
