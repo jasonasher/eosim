@@ -61,7 +61,8 @@ impl RandomContext for Context {
                 })
         });
         if random_holder.reseed {
-            random_holder.rng = Box::new(R::RngType::seed_from_u64(base_seed + R::seed_offset()))
+            random_holder.rng = Box::new(R::RngType::seed_from_u64(base_seed + R::seed_offset()));
+            random_holder.reseed = false;
         }
         RefMut::map(random_holder, |random_holder| {
             random_holder.rng.downcast_mut::<R::RngType>().unwrap()
@@ -99,17 +100,27 @@ mod test {
         let mut context = Context::new();
         context.set_base_random_seed(8675309);
         let mut rng_one = context.get_rng::<RandomIdOne>();
-        let rng_one_sample = rng_one.next_u64();
+        let rng_one_sample_1 = rng_one.next_u64();
+        let rng_one_sample_2 = rng_one.next_u64();
         drop(rng_one);
         let mut rng_two = context.get_rng::<RandomIdTwo>();
-        let rng_two_sample = rng_two.next_u64();
+        let rng_two_sample_1 = rng_two.next_u64();
+        let rng_two_sample_2 = rng_two.next_u64();
         drop(rng_two);
+        assert_ne!(rng_one_sample_1, rng_one_sample_2);
+        assert_ne!(rng_two_sample_1, rng_two_sample_2);
+        assert_ne!(rng_one_sample_1, rng_two_sample_1);
+        assert_ne!(rng_one_sample_2, rng_two_sample_2);
+        assert_ne!(rng_one_sample_1, rng_two_sample_2);
+        assert_ne!(rng_two_sample_1, rng_one_sample_2);
 
         context.set_base_random_seed(8675309);
         let mut rng_one = context.get_rng::<RandomIdOne>();
-        assert_eq!(rng_one_sample, rng_one.next_u64());
+        assert_eq!(rng_one_sample_1, rng_one.next_u64());
+        assert_eq!(rng_one_sample_2, rng_one.next_u64());
         drop(rng_one);
         let mut rng_two = context.get_rng::<RandomIdTwo>();
-        assert_eq!(rng_two_sample, rng_two.next_u64());
+        assert_eq!(rng_two_sample_1, rng_two.next_u64());
+        assert_eq!(rng_two_sample_2, rng_two.next_u64());
     }
 }
