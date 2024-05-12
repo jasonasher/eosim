@@ -6,8 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+csv = "1.3.0"
 derivative = "2.2.0"
 fxhash = "0.2.1"
 indexmap = "2.2.6"
 rand = "0.8.5"
+serde = "1.0.201"
+serde_derive = "1.0.201"
+tempfile = "3.10.1"
 tinyset = "0.4.15"

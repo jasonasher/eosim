@@ -8,3 +8,4 @@ pub mod people;
 pub mod person_properties;
 pub mod random;
 pub mod regions;
+pub mod reports;
