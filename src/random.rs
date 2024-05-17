@@ -115,12 +115,21 @@ mod test {
         assert_ne!(rng_two_sample_1, rng_one_sample_2);
 
         context.set_base_random_seed(8675309);
-        let mut rng_one = context.get_rng::<RandomIdOne>();
-        assert_eq!(rng_one_sample_1, rng_one.next_u64());
-        assert_eq!(rng_one_sample_2, rng_one.next_u64());
-        drop(rng_one);
-        let mut rng_two = context.get_rng::<RandomIdTwo>();
-        assert_eq!(rng_two_sample_1, rng_two.next_u64());
-        assert_eq!(rng_two_sample_2, rng_two.next_u64());
+        assert_eq!(
+            rng_one_sample_1,
+            context.get_rng::<RandomIdOne>().next_u64()
+        );
+        assert_eq!(
+            rng_one_sample_2,
+            context.get_rng::<RandomIdOne>().next_u64()
+        );
+        assert_eq!(
+            rng_two_sample_1,
+            context.get_rng::<RandomIdTwo>().next_u64()
+        );
+        assert_eq!(
+            rng_two_sample_2,
+            context.get_rng::<RandomIdTwo>().next_u64()
+        );
     }
 }
