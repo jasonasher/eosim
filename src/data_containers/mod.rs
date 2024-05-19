@@ -19,7 +19,7 @@ pub trait Property: Any {
 }
 
 pub trait PropertyWithDefault: Any {
-    type Value: Any + Clone + Debug;
+    type Value: Any + Copy + Debug;
     fn get_default() -> Self::Value;
 }
 

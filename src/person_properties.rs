@@ -87,10 +87,9 @@ impl PersonPropertyContext for Context {
                         .person_property_container
                         .get_value::<T>(person_id.id);
                     for callback in callback_vec {
-                        let current_value_clone = current_value.clone();
                         let internal_callback = Rc::clone(callback);
                         callbacks_to_add.push(Box::new(move |context| {
-                            internal_callback(context, person_id, current_value_clone)
+                            internal_callback(context, person_id, current_value)
                         }));
                     }
                 }

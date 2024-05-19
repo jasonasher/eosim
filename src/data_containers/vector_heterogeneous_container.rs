@@ -39,7 +39,7 @@ impl VecDataContainer {
                 if index >= vec.len() {
                     K::get_default()
                 } else {
-                    vec[index].clone()
+                    vec[index]
                 }
             }
             None => K::get_default(),
