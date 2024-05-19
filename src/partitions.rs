@@ -311,6 +311,7 @@ impl InternalPartitionContext for Context {
 mod test {
     use crate::context::Context;
     use crate::data_containers::{PersonContainer, PropertyWithDefault};
+    use crate::define_person_property;
     use crate::partitions::{Partition, PartitionContext};
     use crate::people::{PeopleContext, PersonId};
     use crate::person_properties::{
@@ -320,25 +321,8 @@ mod test {
     use rand::{Rng, SeedableRng};
     use std::collections::HashSet;
 
-    struct PropertyOne {}
-    impl PropertyWithDefault for PropertyOne {
-        type Value = u8;
-
-        fn get_default() -> Self::Value {
-            0
-        }
-    }
-    impl PersonProperty for PropertyOne {}
-
-    struct PropertyTwo {}
-    impl PropertyWithDefault for PropertyTwo {
-        type Value = bool;
-
-        fn get_default() -> Self::Value {
-            false
-        }
-    }
-    impl PersonProperty for PropertyTwo {}
+    define_person_property!(PropertyOne, u8, 0);
+    define_person_property!(PropertyTwo, bool, false);
 
     struct PartitionOne {}
 
