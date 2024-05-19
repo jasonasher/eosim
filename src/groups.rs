@@ -10,16 +10,15 @@ use tinyset::SetUsize;
 
 pub trait GroupType: Any + Hash + Eq + PartialEq {}
 
+// TODO: Implement Group properties
 pub trait GroupProperty: PropertyWithDefault {
     type Group: GroupType;
-    // type Value: Any + Clone + Copy + Debug;
-    // fn get_default() -> Self::Value where Self: Sized;
 }
 
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct GroupId<T: GroupType> {
     pub id: usize,
-    // Marker to say this group id is associate with T (but does not own it)
+    // Marker to say this group id is associated with T (but does not own it)
     pub group_type: PhantomData<*const T>,
 }
 
@@ -46,7 +45,8 @@ struct GroupsDataContainer {
     // Stores for each GroupType a vector by PersonId of the set of groups by id that the person belongs to
     person_to_group_map: HashMap<TypeId, Vec<SetUsize>>,
     // Stores for each GroupType a vector by GroupId of the set of people by id in that group
-    group_to_person_map: HashMap<TypeId, Vec<VecPersonContainer>>, // TODO: Group identifiers (by type)
+    group_to_person_map: HashMap<TypeId, Vec<VecPersonContainer>>,
+    // TODO: Group properties (by group type)
 }
 
 struct GroupsPlugin {}
