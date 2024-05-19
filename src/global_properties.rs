@@ -9,6 +9,20 @@ use crate::data_containers::Property;
 // TODO: Decide if we want default global property values
 pub trait GlobalProperty: Property {}
 
+#[macro_export]
+macro_rules! define_global_property {
+    ($global_property:ident, $value:ty) => {
+        struct $global_property {}
+
+        impl Property for $global_property {
+            type Value = $value;
+        }
+
+        impl GlobalProperty for $global_property {}
+    };
+}
+pub use define_global_property;
+
 struct GlobalPropertyDataContainer {
     global_property_container: HeterogeneousContainer,
     global_property_change_callbacks: HashMap<TypeId, Box<dyn Any>>,
@@ -113,11 +127,7 @@ mod test {
     use crate::data_containers::Property;
     use crate::global_properties::{GlobalProperty, GlobalPropertyContext};
 
-    struct PropertyA {}
-    impl Property for PropertyA {
-        type Value = usize;
-    }
-    impl GlobalProperty for PropertyA {}
+    define_global_property!(PropertyA, usize);
 
     #[derive(Copy, Clone)]
     struct PropertyBValues {
@@ -125,11 +135,7 @@ mod test {
         number_of_calls: usize,
     }
 
-    struct PropertyB {}
-    impl Property for PropertyB {
-        type Value = PropertyBValues;
-    }
-    impl GlobalProperty for PropertyB {}
+    define_global_property!(PropertyB, PropertyBValues);
 
     #[test]
     fn test() {
