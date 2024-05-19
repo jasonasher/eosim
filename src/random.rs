@@ -19,18 +19,14 @@ struct RandomData {
     random_holders: RefCell<HashMap<TypeId, RandomHolder>>,
 }
 
-struct RandomPlugin {}
-
-impl Plugin for RandomPlugin {
-    type DataContainer = RandomData;
-
-    fn get_data_container() -> Self::DataContainer {
-        RandomData {
-            base_seed: 0,
-            random_holders: RefCell::new(HashMap::new()),
-        }
+crate::context::define_plugin!(
+    RandomPlugin,
+    RandomData,
+    RandomData {
+        base_seed: 0,
+        random_holders: RefCell::new(HashMap::new()),
     }
-}
+);
 
 pub trait RandomContext {
     fn set_base_random_seed(&mut self, base_seed: u64);

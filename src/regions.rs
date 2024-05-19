@@ -81,21 +81,17 @@ struct RegionsDataContainer {
     partition_update_callback_providers: HashMap<TypeId, Box<PartitionUpdateCallbackProvider>>,
 }
 
-struct RegionsPlugin {}
-
-impl Plugin for RegionsPlugin {
-    type DataContainer = RegionsDataContainer;
-
-    fn get_data_container() -> Self::DataContainer {
-        RegionsDataContainer {
-            max_region_id: None,
-            region_map: Vec::new(),
-            region_property_container: VecDataContainer::new(),
-            region_change_callbacks: Vec::new(),
-            partition_update_callback_providers: HashMap::new(),
-        }
+crate::context::define_plugin!(
+    RegionsPlugin,
+    RegionsDataContainer,
+    RegionsDataContainer {
+        max_region_id: None,
+        region_map: Vec::new(),
+        region_property_container: VecDataContainer::new(),
+        region_change_callbacks: Vec::new(),
+        partition_update_callback_providers: HashMap::new(),
     }
-}
+);
 
 pub trait RegionsContext {
     fn add_region(&mut self) -> CreationBuilder<RegionId>;
@@ -318,15 +314,7 @@ mod test {
         assert_eq!(context.get_person_region(new_person), region_one);
     }
 
-    struct ComponentOne {}
-
-    impl Plugin for ComponentOne {
-        type DataContainer = Option<RegionId>;
-
-        fn get_data_container() -> Self::DataContainer {
-            None
-        }
-    }
+    crate::context::define_plugin!(ComponentOne, Option<RegionId>, None);
 
     impl Component for ComponentOne {
         fn init(context: &mut Context) {

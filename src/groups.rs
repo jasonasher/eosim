@@ -49,19 +49,15 @@ struct GroupsDataContainer {
     // TODO: Group properties (by group type)
 }
 
-struct GroupsPlugin {}
-
-impl Plugin for GroupsPlugin {
-    type DataContainer = GroupsDataContainer;
-
-    fn get_data_container() -> GroupsDataContainer {
-        GroupsDataContainer {
-            max_group_id: HashMap::new(),
-            person_to_group_map: HashMap::new(),
-            group_to_person_map: HashMap::new(),
-        }
+crate::context::define_plugin!(
+    GroupsPlugin,
+    GroupsDataContainer,
+    GroupsDataContainer {
+        max_group_id: HashMap::new(),
+        person_to_group_map: HashMap::new(),
+        group_to_person_map: HashMap::new(),
     }
-}
+);
 
 pub trait GroupsContext {
     fn add_group<T: GroupType>(&mut self) -> GroupId<T>;

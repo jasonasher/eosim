@@ -55,19 +55,15 @@ struct PeopleDataContainer {
     creation_observers: Rc<RefCell<HashMap<TypeId, Rc<PersonCreationCallback>>>>,
 }
 
-struct PeoplePlugin {}
-
-impl Plugin for PeoplePlugin {
-    type DataContainer = PeopleDataContainer;
-
-    fn get_data_container() -> Self::DataContainer {
-        PeopleDataContainer {
-            max_person_id: None,
-            creation_immediate_callbacks: Rc::new(RefCell::new(HashMap::new())),
-            creation_observers: Rc::new(RefCell::new(HashMap::new())),
-        }
+crate::context::define_plugin!(
+    PeoplePlugin,
+    PeopleDataContainer,
+    PeopleDataContainer {
+        max_person_id: None,
+        creation_immediate_callbacks: Rc::new(RefCell::new(HashMap::new())),
+        creation_observers: Rc::new(RefCell::new(HashMap::new())),
     }
-}
+);
 
 pub trait PeopleContext {
     fn add_person(&mut self) -> PersonBuilder;
@@ -147,14 +143,7 @@ mod tests {
 
     use super::{PeopleContext, PersonId};
 
-    struct PluginA {}
-    impl Plugin for PluginA {
-        type DataContainer = Option<PersonId>;
-
-        fn get_data_container() -> Self::DataContainer {
-            None
-        }
-    }
+    crate::context::define_plugin!(PluginA, Option<PersonId>, None);
 
     #[test]
     fn test_add_person() {

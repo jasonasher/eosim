@@ -14,7 +14,6 @@ type LabelFunction<T> = dyn Fn(&Context, PersonId) -> T;
 pub type PartitionUpdateCallbackProvider =
     dyn (Fn(&Context, PersonId) -> Box<dyn Fn(&mut Context)>);
 
-//impl (Fn(&Context, PersonId) -> Box<dyn Fn(&mut Context)>) + 'static
 pub trait Partition: Any {
     type LabelType: Any + Hash + Eq + Copy;
 
@@ -47,17 +46,13 @@ struct PartitionDataContainer {
     partition_map: HashMap<TypeId, Box<dyn Any>>,
 }
 
-struct PartitionPlugin {}
-
-impl Plugin for PartitionPlugin {
-    type DataContainer = PartitionDataContainer;
-
-    fn get_data_container() -> Self::DataContainer {
-        PartitionDataContainer {
-            partition_map: HashMap::new(),
-        }
+crate::context::define_plugin!(
+    PartitionPlugin,
+    PartitionDataContainer,
+    PartitionDataContainer {
+        partition_map: HashMap::new(),
     }
-}
+);
 pub struct PartitionBuilder<'a, P: Partition> {
     context: &'a mut Context,
     label_function: Option<Rc<LabelFunction<P::LabelType>>>,

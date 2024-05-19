@@ -59,19 +59,15 @@ struct PersonPropertyDataContainer {
         HashMap<TypeId, HashMap<TypeId, Box<PartitionUpdateCallbackProvider>>>,
 }
 
-struct PersonPropertyPlugin {}
-
-impl Plugin for PersonPropertyPlugin {
-    type DataContainer = PersonPropertyDataContainer;
-
-    fn get_data_container() -> PersonPropertyDataContainer {
-        PersonPropertyDataContainer {
-            person_property_container: VecDataContainer::new(),
-            person_property_change_callbacks: HashMap::new(),
-            partition_update_callback_providers: HashMap::new(),
-        }
+crate::context::define_plugin!(
+    PersonPropertyPlugin,
+    PersonPropertyDataContainer,
+    PersonPropertyDataContainer {
+        person_property_container: VecDataContainer::new(),
+        person_property_change_callbacks: HashMap::new(),
+        partition_update_callback_providers: HashMap::new(),
     }
-}
+);
 
 type ContextCallback = dyn FnOnce(&mut Context);
 type PersonPropertyChangeCallback<T> = dyn Fn(&mut Context, PersonId, T);

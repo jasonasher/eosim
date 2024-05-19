@@ -29,18 +29,15 @@ struct GlobalPropertyDataContainer {
 }
 
 type GlobalPropertyChangeCallback<T> = dyn Fn(&mut Context, Option<&T>);
-struct GlobalPropertyPlugin {}
 
-impl Plugin for GlobalPropertyPlugin {
-    type DataContainer = GlobalPropertyDataContainer;
-
-    fn get_data_container() -> Self::DataContainer {
-        GlobalPropertyDataContainer {
-            global_property_container: HeterogeneousContainer::new(),
-            global_property_change_callbacks: HashMap::new(),
-        }
+crate::context::define_plugin!(
+    GlobalPropertyPlugin,
+    GlobalPropertyDataContainer,
+    GlobalPropertyDataContainer {
+        global_property_container: HeterogeneousContainer::new(),
+        global_property_change_callbacks: HashMap::new(),
     }
-}
+);
 
 pub trait GlobalPropertyContext {
     fn get_global_property_value<T: GlobalProperty>(&self) -> Option<&T::Value>;

@@ -34,15 +34,11 @@ impl<T> ReportItemHandler<T> {
     }
 }
 
-struct ReportsPlugin {}
-
-impl Plugin for ReportsPlugin {
-    type DataContainer = ReportsDataContainer;
-
-    fn get_data_container() -> Self::DataContainer {
-        ReportsDataContainer::new()
-    }
-}
+crate::context::define_plugin!(
+    ReportsPlugin,
+    ReportsDataContainer,
+    ReportsDataContainer::new()
+);
 
 pub trait ReportsContext {
     fn set_report_item_handler<T: Report>(&mut self, callback: impl FnMut(T::Item) + 'static);
@@ -127,13 +123,7 @@ mod test {
     use std::thread;
     use tempfile::tempfile;
 
-    struct TestReport {}
-
-    impl Plugin for TestReport {
-        type DataContainer = ();
-
-        fn get_data_container() -> () {}
-    }
+    crate::context::define_plugin!(TestReport, (), ());
 
     #[derive(Serialize)]
     struct TestItem {

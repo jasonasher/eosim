@@ -16,6 +16,22 @@ pub trait Plugin: Any {
     fn get_data_container() -> Self::DataContainer;
 }
 
+#[macro_export]
+macro_rules! define_plugin {
+    ($plugin:ident, $data_container:ty, $default: expr) => {
+        struct $plugin {}
+
+        impl Plugin for $plugin {
+            type DataContainer = $data_container;
+
+            fn get_data_container() -> Self::DataContainer {
+                $default
+            }
+        }
+    };
+}
+pub use define_plugin;
+
 pub struct PlanId {
     pub id: u64,
 }
@@ -212,9 +228,9 @@ impl Default for Context {
 
 #[cfg(test)]
 mod tests {
-    use crate::context::{Component, Context, Plugin};
+    use super::*;
 
-    struct ComponentA {}
+    define_plugin!(ComponentA, u32, 0);
 
     impl ComponentA {
         fn increment_counter(context: &mut Context) {
@@ -225,14 +241,6 @@ mod tests {
     impl Component for ComponentA {
         fn init(context: &mut Context) {
             context.add_plan(1.0, Self::increment_counter);
-        }
-    }
-
-    impl Plugin for ComponentA {
-        type DataContainer = u32;
-
-        fn get_data_container() -> Self::DataContainer {
-            0
         }
     }
 
