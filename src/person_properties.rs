@@ -13,7 +13,7 @@ pub trait PersonProperty: PropertyWithDefault {}
 #[macro_export]
 macro_rules! define_person_property {
     ($person_property:ident, $value:ty, $default: expr) => {
-        struct $person_property {}
+        pub struct $person_property {}
 
         impl PropertyWithDefault for $person_property {
             type Value = $value;

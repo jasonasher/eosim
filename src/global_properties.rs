@@ -12,7 +12,7 @@ pub trait GlobalProperty: Property {}
 #[macro_export]
 macro_rules! define_global_property {
     ($global_property:ident, $value:ty) => {
-        struct $global_property {}
+        pub struct $global_property {}
 
         impl Property for $global_property {
             type Value = $value;
@@ -130,7 +130,7 @@ mod test {
     define_global_property!(PropertyA, usize);
 
     #[derive(Copy, Clone)]
-    struct PropertyBValues {
+    pub struct PropertyBValues {
         old_a_value: usize,
         number_of_calls: usize,
     }
