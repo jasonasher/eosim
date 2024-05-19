@@ -21,6 +21,24 @@ impl RegionId {
 
 pub trait RegionProperty: PropertyWithDefault {}
 
+#[macro_export]
+macro_rules! define_region_property {
+    ($region_property:ident, $value:ty, $default: expr) => {
+        pub struct $region_property {}
+
+        impl PropertyWithDefault for $region_property {
+            type Value = $value;
+
+            fn get_default() -> Self::Value {
+                $default
+            }
+        }
+
+        impl RegionProperty for $region_property {}
+    };
+}
+pub use define_region_property;
+
 fn create_region(context: &mut Context) -> RegionId {
     let data_container = context.get_data_container_mut::<RegionsPlugin>();
     let region_id = match data_container.max_region_id {
@@ -266,17 +284,7 @@ mod test {
         RegionsPartitionBuilder, RegionsPersonBuilder,
     };
 
-    struct RegionPropertyA {}
-
-    impl PropertyWithDefault for RegionPropertyA {
-        type Value = f64;
-
-        fn get_default() -> Self::Value {
-            0.0
-        }
-    }
-
-    impl RegionProperty for RegionPropertyA {}
+    define_region_property!(RegionPropertyA, f64, 0.0);
 
     #[test]
     fn test() {
