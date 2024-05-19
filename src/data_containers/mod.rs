@@ -15,6 +15,7 @@ pub mod vector_person_container;
 
 pub trait Property: Any {
     type Value: Any;
+    fn index() -> usize;
 }
 
 pub trait PropertyWithDefault: Any {
@@ -25,6 +26,10 @@ pub trait PropertyWithDefault: Any {
 
 impl<T: PropertyWithDefault> Property for T {
     type Value = T::Value;
+
+    fn index() -> usize {
+        T::index()
+    }
 }
 
 pub trait PersonContainer {

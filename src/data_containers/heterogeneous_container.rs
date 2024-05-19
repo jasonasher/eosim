@@ -1,12 +1,10 @@
 use std::any::Any;
-use std::any::TypeId;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::data_containers::Property;
 
 pub struct HeterogeneousContainer {
-    map: HashMap<TypeId, Rc<dyn Any>>,
+    data: Vec<Option<Rc<dyn Any>>>,
 }
 
 impl Default for HeterogeneousContainer {
@@ -17,25 +15,34 @@ impl Default for HeterogeneousContainer {
 
 impl HeterogeneousContainer {
     pub fn new() -> HeterogeneousContainer {
-        HeterogeneousContainer {
-            map: HashMap::new(),
-        }
+        HeterogeneousContainer { data: Vec::new() }
     }
 
     pub fn set_value<K: Property>(&mut self, value: K::Value) {
-        self.map.insert(TypeId::of::<K>(), Rc::new(value));
+        let property_index = K::index();
+        if property_index >= self.data.len() {
+            self.data.resize_with(property_index + 1, || None)
+        }
+        self.data[property_index] = Some(Rc::new(value));
     }
 
     pub fn get_value<K: Property>(&self) -> Option<&K::Value> {
-        match self.map.get(&TypeId::of::<K>()) {
-            None => None,
-            Some(boxed_value) => boxed_value.downcast_ref::<K::Value>(),
+        let property_index = K::index();
+        if property_index >= self.data.len() {
+            return None;
         }
+        self.data[property_index]
+            .as_ref()
+            .map(|boxed_value| boxed_value.downcast_ref::<K::Value>().unwrap())
     }
 
     pub fn get_rc_value<K: Property>(&self) -> Option<Rc<K::Value>> {
-        self.map
-            .get(&TypeId::of::<K>())
+        let property_index = K::index();
+        if property_index >= self.data.len() {
+            return None;
+        }
+        self.data[property_index]
+            .as_ref()
             .map(|boxed_value| Rc::clone(boxed_value).downcast::<K::Value>().unwrap())
     }
 }
@@ -46,11 +53,17 @@ mod tests {
     struct KeyOne {}
     impl Property for KeyOne {
         type Value = usize;
+        fn index() -> usize {
+            0
+        }
     }
 
     struct KeyTwo {}
     impl Property for KeyTwo {
         type Value = bool;
+        fn index() -> usize {
+            1
+        }
     }
 
     #[test]

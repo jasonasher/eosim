@@ -1,6 +1,8 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 use crate::context::Context;
 use crate::data_containers::heterogeneous_container::HeterogeneousContainer;
@@ -9,6 +11,17 @@ use crate::data_containers::Property;
 // TODO: Decide if we want default global property values
 pub trait GlobalProperty: Property {}
 
+static INDEX: Mutex<usize> = Mutex::new(0);
+
+pub fn next(index: &AtomicUsize) -> usize {
+    let mut guard = INDEX.lock().unwrap();
+    if index.load(Ordering::SeqCst) == usize::MAX {
+        index.store(*guard, Ordering::SeqCst);
+        *guard += 1;
+    }
+    index.load(Ordering::Relaxed)
+}
+
 #[macro_export]
 macro_rules! define_global_property {
     ($global_property:ident, $value:ty) => {
@@ -16,6 +29,16 @@ macro_rules! define_global_property {
 
         impl $crate::data_containers::Property for $global_property {
             type Value = $value;
+
+            fn index() -> usize {
+                static INDEX: std::sync::atomic::AtomicUsize =
+                    std::sync::atomic::AtomicUsize::new(usize::MAX);
+                let mut index = INDEX.load(std::sync::atomic::Ordering::Relaxed);
+                if index == usize::MAX {
+                    index = $crate::global_properties::next(&INDEX);
+                }
+                index
+            }
         }
 
         impl $crate::global_properties::GlobalProperty for $global_property {}
