@@ -10,6 +10,48 @@ use crate::people::{PersonBuilder, PersonId};
 
 pub trait PersonProperty: PropertyWithDefault {}
 
+#[macro_export]
+macro_rules! define_person_property {
+    ($person_property:ident, $value:ty, $default: expr) => {
+        struct $person_property {}
+
+        impl PropertyWithDefault for $person_property {
+            type Value = $value;
+
+            fn get_default() -> Self::Value {
+                $default
+            }
+        }
+
+        impl PersonProperty for $person_property {}
+    };
+}
+pub use define_person_property;
+
+#[macro_export]
+macro_rules! define_person_property_from_enum {
+    ($person_property:ty, $default: expr) => {
+        impl PropertyWithDefault for $person_property {
+            type Value = $person_property;
+
+            fn get_default() -> Self::Value {
+                $default
+            }
+        }
+
+        impl PersonProperty for $person_property {}
+
+        impl Copy for $person_property {}
+
+        impl Clone for $person_property {
+            fn clone(&self) -> Self {
+                *self
+            }
+        }
+    };
+}
+pub use define_person_property_from_enum;
+
 struct PersonPropertyDataContainer {
     person_property_container: VecDataContainer,
     person_property_change_callbacks: HashMap<TypeId, Box<dyn Any>>,
@@ -201,25 +243,13 @@ mod test {
         PersonId, PersonPropertiesPersonBuilder, PersonProperty, PersonPropertyContext,
     };
 
-    struct PropertyOne {}
-    impl PropertyWithDefault for PropertyOne {
-        type Value = usize;
+    define_person_property!(PropertyOne, usize, 0);
 
-        fn get_default() -> Self::Value {
-            0
-        }
+    enum PropertyTwo {
+        A,
+        B,
     }
-    impl PersonProperty for PropertyOne {}
-
-    struct PropertyTwo {}
-    impl PropertyWithDefault for PropertyTwo {
-        type Value = bool;
-
-        fn get_default() -> Self::Value {
-            false
-        }
-    }
-    impl PersonProperty for PropertyTwo {}
+    define_person_property_from_enum!(PropertyTwo, PropertyTwo::A);
 
     #[test]
     fn test() {
@@ -230,7 +260,7 @@ mod test {
         );
 
         context.set_person_property_value::<PropertyOne>(PersonId { id: 1 }, 1);
-        context.set_person_property_value::<PropertyTwo>(PersonId { id: 1 }, true);
+        context.set_person_property_value::<PropertyTwo>(PersonId { id: 1 }, PropertyTwo::B);
 
         assert_eq!(
             context.get_person_property_value::<PropertyOne>(PersonId { id: 0 }),
@@ -240,14 +270,14 @@ mod test {
             context.get_person_property_value::<PropertyOne>(PersonId { id: 1 }),
             1
         );
-        assert_eq!(
+        assert!(matches!(
             context.get_person_property_value::<PropertyTwo>(PersonId { id: 0 }),
-            false
-        );
-        assert_eq!(
+            PropertyTwo::A
+        ));
+        assert!(matches!(
             context.get_person_property_value::<PropertyTwo>(PersonId { id: 1 }),
-            true
-        );
+            PropertyTwo::B
+        ));
     }
 
     struct ComponentA {}
@@ -257,8 +287,7 @@ mod test {
             person_id: PersonId,
             _value: usize,
         ) {
-            context.set_person_property_value::<PropertyTwo>(person_id, true);
-            //println!("{}", value);
+            context.set_person_property_value::<PropertyTwo>(person_id, PropertyTwo::B);
         }
 
         fn set_person_0_property_one_to_1(context: &mut Context) {
@@ -277,21 +306,24 @@ mod test {
         context.observe_person_property_changes::<PropertyOne>(
             ComponentA::handle_person_property_value_assignment,
         );
-        assert!(!context.get_person_property_value::<PropertyTwo>(PersonId { id: 0 }));
+        assert!(matches!(
+            context.get_person_property_value::<PropertyTwo>(PersonId { id: 0 }),
+            PropertyTwo::A
+        ));
         context.add_plan(1.0, ComponentA::set_person_0_property_one_to_1);
         context.execute();
-        assert_eq!(
+        assert!(matches!(
             context.get_person_property_value::<PropertyTwo>(PersonId { id: 0 }),
-            true
-        );
+            PropertyTwo::B
+        ));
         context.add_plan(2.0, |context| {
             context.set_person_property_value::<PropertyOne>(PersonId { id: 1 }, 1)
         });
         context.execute();
-        assert_eq!(
+        assert!(matches!(
             context.get_person_property_value::<PropertyTwo>(PersonId { id: 1 }),
-            true
-        );
+            PropertyTwo::B
+        ));
     }
 
     #[test]
@@ -300,13 +332,13 @@ mod test {
         let person = context
             .add_person()
             .set_person_property::<PropertyOne>(1)
-            .set_person_property::<PropertyTwo>(true)
+            .set_person_property::<PropertyTwo>(PropertyTwo::B)
             .execute();
         assert_eq!(context.get_person_property_value::<PropertyOne>(person), 1);
-        assert_eq!(
+        assert!(matches!(
             context.get_person_property_value::<PropertyTwo>(person),
-            true
-        );
+            PropertyTwo::B
+        ));
         assert_eq!(context.get_maximum_person_id(), Some(PersonId::new(0)));
     }
 }

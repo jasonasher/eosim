@@ -1,5 +1,4 @@
 use std::any::Any;
-use std::fmt::Debug;
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -19,7 +18,7 @@ pub trait Property: Any {
 }
 
 pub trait PropertyWithDefault: Any {
-    type Value: Any + Copy + Debug;
+    type Value: Any + Copy;
     fn get_default() -> Self::Value;
 }
 
