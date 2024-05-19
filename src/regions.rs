@@ -159,7 +159,7 @@ impl RegionsContext for Context {
 
         // Add observation callbacks
         for callback in observation_callbacks {
-            self.add_callback(callback);
+            self.queue_callback(callback);
         }
 
         // Update value

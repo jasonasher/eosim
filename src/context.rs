@@ -125,7 +125,7 @@ impl Context {
         self.plan_queue.cancel_plan(id);
     }
 
-    pub fn add_callback(&mut self, callback: impl FnOnce(&mut Context) + 'static) {
+    pub fn queue_callback(&mut self, callback: impl FnOnce(&mut Context) + 'static) {
         self.callback_queue.push_back(Box::new(callback));
     }
 

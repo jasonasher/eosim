@@ -81,7 +81,7 @@ impl GlobalPropertyContext for Context {
             }
         }
         for callback in callbacks_to_add {
-            self.add_callback(callback);
+            self.queue_callback(callback);
         }
         let data_container = self.get_data_container_mut::<GlobalPropertyPlugin>();
         data_container

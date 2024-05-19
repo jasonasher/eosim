@@ -44,7 +44,7 @@ fn finalize_person_creation(context: &mut Context, person_id: PersonId) {
     // Add the observation callbacks
     for callback in creation_observers.borrow().values() {
         let internal_callback = Rc::clone(callback);
-        context.add_callback(move |context| (internal_callback)(context, person_id));
+        context.queue_callback(move |context| (internal_callback)(context, person_id));
     }
 }
 
