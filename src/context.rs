@@ -2,6 +2,7 @@ use std::{
     any::{Any, TypeId},
     cmp::Ordering,
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
+    rc::Rc,
 };
 
 use derivative::Derivative;
@@ -115,9 +116,12 @@ impl PlanQueue {
 }
 
 type Callback = dyn FnOnce(&mut Context);
+type EventHandler<E> = dyn Fn(&mut Context, E);
 pub struct Context {
     plan_queue: PlanQueue,
     callback_queue: VecDeque<Box<Callback>>,
+    event_handlers: HashMap<TypeId, Box<dyn Any>>,
+    immediate_event_handlers: HashMap<TypeId, Box<dyn Any>>,
     plugin_data: HashMap<TypeId, Box<dyn Any>>,
     time: f64,
 }
@@ -127,6 +131,8 @@ impl Context {
         Context {
             plan_queue: PlanQueue::new(),
             callback_queue: VecDeque::new(),
+            event_handlers: HashMap::new(),
+            immediate_event_handlers: HashMap::new(),
             plugin_data: HashMap::new(),
             time: 0.0,
         }
@@ -190,6 +196,61 @@ impl Context {
         T::init(self);
     }
 
+    fn add_handlers<E: Copy + 'static>(
+        event_handlers: &mut HashMap<TypeId, Box<dyn Any>>,
+        callback: impl Fn(&mut Context, E) + 'static,
+    ) {
+        let callback_vec = event_handlers
+            .entry(TypeId::of::<E>())
+            .or_insert_with(|| Box::<Vec<Rc<EventHandler<E>>>>::default());
+        let callback_vec: &mut Vec<Rc<EventHandler<E>>> = callback_vec.downcast_mut().unwrap();
+        callback_vec.push(Rc::new(callback));
+    }
+
+    pub fn subscribe_to_event<E: Copy + 'static>(
+        &mut self,
+        callback: impl Fn(&mut Context, E) + 'static,
+    ) {
+        Self::add_handlers(&mut self.event_handlers, callback);
+    }
+
+    pub fn subscribe_immediately_to_event<E: Copy + 'static>(
+        &mut self,
+        callback: impl Fn(&mut Context, E) + 'static,
+    ) {
+        Self::add_handlers(&mut self.immediate_event_handlers, callback);
+    }
+
+    fn collect_callbacks<E: Copy + 'static>(
+        event_handlers: &HashMap<TypeId, Box<dyn Any>>,
+        event: E,
+    ) -> Vec<Box<Callback>> {
+        let mut callbacks_to_return = Vec::<Box<Callback>>::new();
+        let callback_vec = event_handlers.get(&TypeId::of::<E>());
+        if let Some(callback_vec) = callback_vec {
+            let callback_vec: &Vec<Rc<EventHandler<E>>> = callback_vec.downcast_ref().unwrap();
+            if !callback_vec.is_empty() {
+                for callback in callback_vec {
+                    let internal_callback = Rc::clone(callback);
+                    callbacks_to_return
+                        .push(Box::new(move |context| internal_callback(context, event)));
+                }
+            }
+        }
+        callbacks_to_return
+    }
+
+    pub fn release_event<E: Copy + 'static>(&mut self, event: E) {
+        // Queue standard handlers
+        for callback in Self::collect_callbacks(&self.event_handlers, event) {
+            self.queue_callback(callback);
+        }
+        // Process immediate handlers
+        for callback in Self::collect_callbacks(&self.immediate_event_handlers, event) {
+            callback(self);
+        }
+    }
+
     pub fn execute(&mut self) {
         // Execute callbacks if there are any in the queue
         loop {
@@ -228,6 +289,8 @@ impl Default for Context {
 
 #[cfg(test)]
 mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
     use super::*;
 
     define_plugin!(ComponentA, u32, 0);
@@ -259,5 +322,33 @@ mod tests {
         context.execute();
         assert_eq!(context.get_time(), 2.0);
         assert_eq!(*context.get_data_container_mut::<ComponentA>(), 2);
+    }
+
+    #[derive(Copy, Clone)]
+    struct Event {
+        pub data: usize,
+    }
+    #[test]
+    fn test_events() {
+        let mut context = Context::new();
+
+        let obs_data = Rc::new(RefCell::new(0));
+        let immediate_obs_data = Rc::new(RefCell::new(0));
+
+        let obs_data_clone = Rc::clone(&obs_data);
+        context.subscribe_to_event::<Event>(move |_, event| {
+            *obs_data_clone.borrow_mut() = event.data;
+        });
+
+        let immediate_obs_data_clone = Rc::clone(&immediate_obs_data);
+        context.subscribe_immediately_to_event::<Event>(move |_, event| {
+            *immediate_obs_data_clone.borrow_mut() = event.data;
+        });
+
+        context.release_event(Event { data: 1 });
+        assert_eq!(*immediate_obs_data.borrow(), 1);
+
+        context.execute();
+        assert_eq!(*obs_data.borrow(), 1);
     }
 }
