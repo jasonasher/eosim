@@ -1,4 +1,4 @@
-use crate::context::{Context, Plugin};
+use crate::context::Context;
 use rand::SeedableRng;
 use std::any::{Any, TypeId};
 use std::cell::{RefCell, RefMut};

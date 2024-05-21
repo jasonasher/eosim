@@ -1,6 +1,6 @@
 extern crate rand;
 
-use crate::context::{Context, Plugin};
+use crate::context::Context;
 use crate::data_containers::indexset_person_container::IndexSetPersonContainer;
 use crate::data_containers::PersonContainer;
 use crate::people::{PeopleContext, PersonId};
@@ -305,13 +305,11 @@ impl InternalPartitionContext for Context {
 #[cfg(test)]
 mod test {
     use crate::context::Context;
-    use crate::data_containers::{PersonContainer, PropertyWithDefault};
+    use crate::data_containers::PersonContainer;
     use crate::define_person_property;
     use crate::partitions::{Partition, PartitionContext};
     use crate::people::{PeopleContext, PersonId};
-    use crate::person_properties::{
-        PersonProperty, PersonPropertyContext, PersonPropertyPartitionBuilder,
-    };
+    use crate::person_properties::{PersonPropertyContext, PersonPropertyPartitionBuilder};
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
     use std::collections::HashSet;

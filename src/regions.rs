@@ -1,4 +1,4 @@
-use crate::context::{Context, Plugin};
+use crate::context::Context;
 use crate::creation::CreationBuilder;
 use crate::data_containers::vector_heterogeneous_container::VecDataContainer;
 use crate::data_containers::PropertyWithDefault;
@@ -26,7 +26,7 @@ macro_rules! define_region_property {
     ($region_property:ident, $value:ty, $default: expr) => {
         pub struct $region_property {}
 
-        impl PropertyWithDefault for $region_property {
+        impl $crate::data_containers::PropertyWithDefault for $region_property {
             type Value = $value;
 
             fn get_default() -> Self::Value {
@@ -34,7 +34,7 @@ macro_rules! define_region_property {
             }
         }
 
-        impl RegionProperty for $region_property {}
+        impl $crate::regions::RegionProperty for $region_property {}
     };
 }
 pub use define_region_property;
@@ -271,13 +271,13 @@ impl<'a, P: Partition> RegionsPartitionBuilder<'a, P> for PartitionBuilder<'a, P
 
 #[cfg(test)]
 mod test {
-    use crate::context::{Component, Context, Plugin};
-    use crate::data_containers::{PersonContainer, PropertyWithDefault};
+    use crate::context::{Component, Context};
+    use crate::data_containers::PersonContainer;
     use crate::partitions::{Partition, PartitionContext};
     use crate::people::PeopleContext;
     use crate::regions::{
-        RegionId, RegionPropertiesCreationBuilder, RegionProperty, RegionsContext,
-        RegionsPartitionBuilder, RegionsPersonBuilder,
+        RegionId, RegionPropertiesCreationBuilder, RegionsContext, RegionsPartitionBuilder,
+        RegionsPersonBuilder,
     };
 
     define_region_property!(RegionPropertyA, f64, 0.0);

@@ -1,4 +1,4 @@
-use crate::context::{Context, Plugin};
+use crate::context::Context;
 use crate::creation::CreationBuilder;
 use std::any::{Any, TypeId};
 use std::cell::RefCell;
@@ -139,7 +139,7 @@ impl PeopleContext for Context {
 
 #[cfg(test)]
 mod tests {
-    use crate::context::{Context, Plugin};
+    use crate::context::Context;
 
     use super::{PeopleContext, PersonId};
 

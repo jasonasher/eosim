@@ -2,7 +2,7 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::context::{Context, Plugin};
+use crate::context::Context;
 use crate::data_containers::heterogeneous_container::HeterogeneousContainer;
 use crate::data_containers::Property;
 
@@ -14,11 +14,11 @@ macro_rules! define_global_property {
     ($global_property:ident, $value:ty) => {
         pub struct $global_property {}
 
-        impl Property for $global_property {
+        impl $crate::data_containers::Property for $global_property {
             type Value = $value;
         }
 
-        impl GlobalProperty for $global_property {}
+        impl $crate::global_properties::GlobalProperty for $global_property {}
     };
 }
 pub use define_global_property;
@@ -121,8 +121,7 @@ impl GlobalPropertyContext for Context {
 #[cfg(test)]
 mod test {
     use crate::context::Context;
-    use crate::data_containers::Property;
-    use crate::global_properties::{GlobalProperty, GlobalPropertyContext};
+    use crate::global_properties::GlobalPropertyContext;
 
     define_global_property!(PropertyA, usize);
 

@@ -2,7 +2,7 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::context::{Context, Plugin};
+use crate::context::Context;
 use crate::data_containers::vector_heterogeneous_container::VecDataContainer;
 use crate::data_containers::PropertyWithDefault;
 use crate::partitions::{Partition, PartitionBuilder, PartitionUpdateCallbackProvider};
@@ -15,7 +15,7 @@ macro_rules! define_person_property {
     ($person_property:ident, $value:ty, $default: expr) => {
         pub struct $person_property {}
 
-        impl PropertyWithDefault for $person_property {
+        impl $crate::data_containers::PropertyWithDefault for $person_property {
             type Value = $value;
 
             fn get_default() -> Self::Value {
@@ -23,7 +23,7 @@ macro_rules! define_person_property {
             }
         }
 
-        impl PersonProperty for $person_property {}
+        impl $crate::person_properties::PersonProperty for $person_property {}
     };
 }
 pub use define_person_property;
@@ -31,7 +31,7 @@ pub use define_person_property;
 #[macro_export]
 macro_rules! define_person_property_from_enum {
     ($person_property:ty, $default: expr) => {
-        impl PropertyWithDefault for $person_property {
+        impl $crate::data_containers::PropertyWithDefault for $person_property {
             type Value = $person_property;
 
             fn get_default() -> Self::Value {
@@ -39,7 +39,7 @@ macro_rules! define_person_property_from_enum {
             }
         }
 
-        impl PersonProperty for $person_property {}
+        impl $crate::person_properties::PersonProperty for $person_property {}
 
         impl Copy for $person_property {}
 
@@ -233,10 +233,9 @@ impl<'a, P: Partition> PersonPropertyPartitionBuilder<'a, P> for PartitionBuilde
 #[cfg(test)]
 mod test {
     use crate::context::{Component, Context};
-    use crate::data_containers::PropertyWithDefault;
     use crate::people::PeopleContext;
     use crate::person_properties::{
-        PersonId, PersonPropertiesPersonBuilder, PersonProperty, PersonPropertyContext,
+        PersonId, PersonPropertiesPersonBuilder, PersonPropertyContext,
     };
 
     define_person_property!(PropertyOne, usize, 0);

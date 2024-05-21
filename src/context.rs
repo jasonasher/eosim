@@ -21,7 +21,7 @@ macro_rules! define_plugin {
     ($plugin:ident, $data_container:ty, $default: expr) => {
         struct $plugin {}
 
-        impl Plugin for $plugin {
+        impl $crate::context::Plugin for $plugin {
             type DataContainer = $data_container;
 
             fn get_data_container() -> Self::DataContainer {

@@ -1,4 +1,4 @@
-use crate::context::{Context, Plugin};
+use crate::context::Context;
 use serde::Serialize;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
@@ -113,7 +113,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::context::{Context, Plugin};
+    use crate::context::Context;
     use crate::reports::{
         get_channel_report_handler, get_file_report_handler, Report, ReportsContext,
     };
