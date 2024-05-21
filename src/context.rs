@@ -1,7 +1,11 @@
 use std::{
-    any::{Any, TypeId},
-    cmp::Ordering,
-    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
+    any::Any,
+    cmp::Ordering as CmpOrdering,
+    collections::{BinaryHeap, HashSet, VecDeque},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    },
 };
 
 use derivative::Derivative;
@@ -14,6 +18,19 @@ pub trait Plugin: Any {
     type DataContainer;
 
     fn get_data_container() -> Self::DataContainer;
+
+    fn index() -> usize;
+}
+
+static INDEX: Mutex<usize> = Mutex::new(0);
+
+pub fn next(index: &AtomicUsize) -> usize {
+    let mut guard = INDEX.lock().unwrap();
+    if index.load(Ordering::SeqCst) == usize::MAX {
+        index.store(*guard, Ordering::SeqCst);
+        *guard += 1;
+    }
+    index.load(Ordering::Relaxed)
 }
 
 #[macro_export]
@@ -26,6 +43,16 @@ macro_rules! define_plugin {
 
             fn get_data_container() -> Self::DataContainer {
                 $default
+            }
+
+            fn index() -> usize {
+                static INDEX: std::sync::atomic::AtomicUsize =
+                    std::sync::atomic::AtomicUsize::new(usize::MAX);
+                let mut index = INDEX.load(std::sync::atomic::Ordering::Relaxed);
+                if index == usize::MAX {
+                    index = $crate::context::next(&INDEX);
+                }
+                index
             }
         }
     };
@@ -46,9 +73,9 @@ pub struct TimedPlan {
 }
 
 impl Ord for TimedPlan {
-    fn cmp(&self, other: &Self) -> Ordering {
+    fn cmp(&self, other: &Self) -> CmpOrdering {
         let time_ordering = self.time.partial_cmp(&other.time).unwrap().reverse();
-        if time_ordering == Ordering::Equal {
+        if time_ordering == CmpOrdering::Equal {
             // Break time ties in order of plan id
             self.plan_id.cmp(&other.plan_id)
         } else {
@@ -58,7 +85,7 @@ impl Ord for TimedPlan {
 }
 
 impl PartialOrd for TimedPlan {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<CmpOrdering> {
         Some(self.cmp(other))
     }
 }
@@ -118,7 +145,7 @@ type Callback = dyn FnOnce(&mut Context);
 pub struct Context {
     plan_queue: PlanQueue,
     callback_queue: VecDeque<Box<Callback>>,
-    plugin_data: HashMap<TypeId, Box<dyn Any>>,
+    plugin_data: Vec<Option<Box<dyn Any>>>,
     time: f64,
 }
 
@@ -127,7 +154,7 @@ impl Context {
         Context {
             plan_queue: PlanQueue::new(),
             callback_queue: VecDeque::new(),
-            plugin_data: HashMap::new(),
+            plugin_data: Vec::new(),
             time: 0.0,
         }
     }
@@ -145,40 +172,35 @@ impl Context {
         self.callback_queue.push_back(Box::new(callback));
     }
 
-    fn add_plugin<T: Plugin>(&mut self) {
-        self.plugin_data
-            .insert(TypeId::of::<T>(), Box::new(T::get_data_container()));
-    }
-
     pub fn get_data_container_mut<T: Plugin>(&mut self) -> &mut T::DataContainer {
-        let type_id = &TypeId::of::<T>();
-        if !self.plugin_data.contains_key(type_id) {
-            self.add_plugin::<T>();
+        let index = T::index();
+        let plugin_data = &mut self.plugin_data;
+        if index >= plugin_data.len() {
+            plugin_data.resize_with(index + 1, || None);
         }
-        let data_container = self
-            .plugin_data
-            .get_mut(type_id)
+        if plugin_data[index].is_none() {
+            plugin_data[index] = Some(Box::new(T::get_data_container()));
+        }
+
+        plugin_data[index]
+            .as_mut()
             .unwrap()
-            .downcast_mut::<T::DataContainer>();
-        match data_container {
-            Some(x) => x,
-            None => panic!("Plugin data container of incorrect type"),
-        }
+            .downcast_mut::<T::DataContainer>()
+            .unwrap()
     }
 
     pub fn get_data_container<T: Plugin>(&self) -> Option<&T::DataContainer> {
-        let type_id = &TypeId::of::<T>();
-        if !self.plugin_data.contains_key(type_id) {
-            return None;
-        }
-        let data_container = self
-            .plugin_data
-            .get(type_id)
-            .unwrap()
-            .downcast_ref::<T::DataContainer>();
-        match data_container {
-            Some(x) => Some(x),
-            None => panic!("Plugin data container of incorrect type"),
+        let index = T::index();
+        match self.plugin_data.get(index) {
+            Some(None) => None,
+            Some(data_container) => Some(
+                data_container
+                    .as_ref()
+                    .unwrap()
+                    .downcast_ref::<T::DataContainer>()
+                    .unwrap(),
+            ),
+            None => None,
         }
     }
 
