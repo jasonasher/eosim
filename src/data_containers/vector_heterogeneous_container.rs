@@ -1,10 +1,9 @@
-use std::any::{Any, TypeId};
-use std::collections::HashMap;
+use std::any::Any;
 
 use crate::data_containers::PropertyWithDefault;
 
 pub struct VecDataContainer {
-    data: HashMap<TypeId, Box<dyn Any>>,
+    data: Vec<Option<Box<dyn Any>>>,
 }
 
 impl Default for VecDataContainer {
@@ -15,16 +14,18 @@ impl Default for VecDataContainer {
 
 impl VecDataContainer {
     pub fn new() -> VecDataContainer {
-        VecDataContainer {
-            data: HashMap::new(),
-        }
+        VecDataContainer { data: Vec::new() }
     }
 
     pub fn set_value<K: PropertyWithDefault>(&mut self, index: usize, value: K::Value) {
-        let vec = self
-            .data
-            .entry(TypeId::of::<K>())
-            .or_insert_with(|| Box::new(Vec::<K::Value>::with_capacity(index)));
+        let property_index = K::index();
+        if property_index >= self.data.len() {
+            self.data.resize_with(property_index + 1, || None)
+        }
+        if self.data[property_index].is_none() {
+            self.data[property_index] = Some(Box::new(Vec::<K::Value>::with_capacity(index)));
+        }
+        let vec = self.data[property_index].as_mut().unwrap();
         let vec: &mut Vec<K::Value> = vec.downcast_mut().unwrap();
         if index >= vec.len() {
             vec.resize(index + 1, K::get_default());
@@ -33,8 +34,9 @@ impl VecDataContainer {
     }
 
     pub fn get_value<K: PropertyWithDefault>(&self, index: usize) -> K::Value {
-        match self.data.get(&TypeId::of::<K>()) {
-            Some(boxed_vec) => {
+        let property_index = K::index();
+        match self.data.get(property_index) {
+            Some(Some(boxed_vec)) => {
                 let vec = boxed_vec.downcast_ref::<Vec<K::Value>>().unwrap();
                 if index >= vec.len() {
                     K::get_default()
@@ -42,6 +44,7 @@ impl VecDataContainer {
                     vec[index]
                 }
             }
+            Some(&None) => unreachable!(),
             None => K::get_default(),
         }
     }
@@ -58,6 +61,10 @@ mod tests {
         fn get_default() -> <Self as PropertyWithDefault>::Value {
             0
         }
+
+        fn index() -> usize {
+            0
+        }
     }
 
     struct KeyTwo {}
@@ -66,6 +73,10 @@ mod tests {
 
         fn get_default() -> <Self as PropertyWithDefault>::Value {
             false
+        }
+
+        fn index() -> usize {
+            1
         }
     }
 

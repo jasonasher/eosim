@@ -1,6 +1,8 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 use crate::context::Context;
 use crate::data_containers::vector_heterogeneous_container::VecDataContainer;
@@ -9,6 +11,17 @@ use crate::partitions::{Partition, PartitionBuilder, PartitionUpdateCallbackProv
 use crate::people::{PersonBuilder, PersonId};
 
 pub trait PersonProperty: PropertyWithDefault {}
+
+static INDEX: Mutex<usize> = Mutex::new(0);
+
+pub fn next(index: &AtomicUsize) -> usize {
+    let mut guard = INDEX.lock().unwrap();
+    if index.load(Ordering::SeqCst) == usize::MAX {
+        index.store(*guard, Ordering::SeqCst);
+        *guard += 1;
+    }
+    index.load(Ordering::Relaxed)
+}
 
 #[macro_export]
 macro_rules! define_person_property {
@@ -20,6 +33,16 @@ macro_rules! define_person_property {
 
             fn get_default() -> Self::Value {
                 $default
+            }
+
+            fn index() -> usize {
+                static INDEX: std::sync::atomic::AtomicUsize =
+                    std::sync::atomic::AtomicUsize::new(usize::MAX);
+                let mut index = INDEX.load(std::sync::atomic::Ordering::Relaxed);
+                if index == usize::MAX {
+                    index = $crate::person_properties::next(&INDEX);
+                }
+                index
             }
         }
 
@@ -36,6 +59,16 @@ macro_rules! define_person_property_from_enum {
 
             fn get_default() -> Self::Value {
                 $default
+            }
+
+            fn index() -> usize {
+                static INDEX: std::sync::atomic::AtomicUsize =
+                    std::sync::atomic::AtomicUsize::new(usize::MAX);
+                let mut index = INDEX.load(std::sync::atomic::Ordering::Relaxed);
+                if index == usize::MAX {
+                    index = $crate::context::next(&INDEX);
+                }
+                index
             }
         }
 

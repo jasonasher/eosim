@@ -7,6 +7,8 @@ use crate::people::{PersonBuilder, PersonId};
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Debug)]
 pub struct RegionId {
@@ -21,6 +23,17 @@ impl RegionId {
 
 pub trait RegionProperty: PropertyWithDefault {}
 
+static INDEX: Mutex<usize> = Mutex::new(0);
+
+pub fn next(index: &AtomicUsize) -> usize {
+    let mut guard = INDEX.lock().unwrap();
+    if index.load(Ordering::SeqCst) == usize::MAX {
+        index.store(*guard, Ordering::SeqCst);
+        *guard += 1;
+    }
+    index.load(Ordering::Relaxed)
+}
+
 #[macro_export]
 macro_rules! define_region_property {
     ($region_property:ident, $value:ty, $default: expr) => {
@@ -31,6 +44,16 @@ macro_rules! define_region_property {
 
             fn get_default() -> Self::Value {
                 $default
+            }
+
+            fn index() -> usize {
+                static INDEX: std::sync::atomic::AtomicUsize =
+                    std::sync::atomic::AtomicUsize::new(usize::MAX);
+                let mut index = INDEX.load(std::sync::atomic::Ordering::Relaxed);
+                if index == usize::MAX {
+                    index = $crate::regions::next(&INDEX);
+                }
+                index
             }
         }
 

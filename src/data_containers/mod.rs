@@ -20,6 +20,7 @@ pub trait Property: Any {
 pub trait PropertyWithDefault: Any {
     type Value: Any + Copy;
     fn get_default() -> Self::Value;
+    fn index() -> usize;
 }
 
 impl<T: PropertyWithDefault> Property for T {
