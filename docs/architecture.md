@@ -124,6 +124,68 @@ as follows:
   its `Susceptible`, infect them.
 
 
+# Building Modules
+
+Eosim provides two major extension mechanisms:
+
+* **Plugins** which provide extensible data storage via new
+  data containers
+  
+* **Components** which provide new logic by performing
+  actions
+
+Often these will work together, with a new module providing
+both a plugin and a component, but it is possible and in
+fact common for them to work independently.
+
+
+## Plugins
+
+A plugin has two pieces:
+
+* A definition of a `DataContainer` type associated with the plugin.
+  Each plugin has exactly one `DataContainer`, which is stored in
+  the `Context`.
+  
+* A set of functions which are used to work with the data in the
+  `DataContainer`.
+  
+For example, the builtin `GlobalProperties` plugin provides a
+a way to have arbitrary global properties (e.g., the population
+size) that can then be used by other modules. The `DataContainer`
+stores the properties but isn't accessed directly. Instead,
+plugin defines a set of helper functions:
+
+* `set_global_property_value()` -- sets a value
+* `get_global_property_value()` -- gets a value
+* `observe_global_property_changes()` sets a callback to fire when
+  a property changes
+  
+Note that these functions work together, so it is `set_global_property_value()`
+which is responsible for firing the callback when a value changes.
+If you don't use the helper functions, you don't get the logic
+and you just have a dumb container.
+  
+Plugin functions get attached to the `Context` by the Rust technique
+of defining a trait and then implementing it for the `Context`. Thus,
+you get a global property value like so:
+
+```
+let b = context.get_global_property_value::<PropertyB>().unwrap();
+```
+
+The somewhat confusing Rust "turbofish" ::&lt;&gt; construction
+is an artifact of the way that global properties are stored. Specifically,
+each property is associated with a Rust type, which is also the
+lookup key for the property. So in this case, we are retrieving
+the value associated with the type `PropertyB` which will also
+be of type `PropertyB`. `get_global_property_value()` is a generic
+and the `::<PropertyB>` tells Rust to instantiate it for
+`PropertyB`.
+
+
+
+
 
 
 
