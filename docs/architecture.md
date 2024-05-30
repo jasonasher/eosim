@@ -90,6 +90,40 @@ and **A** responds by taking an action which **B** wants to be
 notified of).
 
 
+## Data Storage
+
+Many modules will want to store data. For instance, a SIR model
+simulation needs to store the S/I/R state of each person in the
+simulation. Naively, the way to do this would be to store the
+data in the module itself, but this has several drawbacks
+in practice:
+
+* It makes it hard to share data between modules because then
+  you have to write accessors.
+  
+* It creates issues with the Rust data ownership model.
+
+* [TODO: others?]
+
+In Eosim, modules store data in *data containers* which are attached
+to the `Context` rather than a module object (indeed, modules don't
+typically have any attached data). A data container can be any Rust
+type but is typically some kind of collection object.
+
+As an example, if you were implementing an SIR model, you might
+have a population of size *N* with identifiers being integers
+in the range *[1..N]*. The model would have an `InfectionState` data
+container which is a map of`PersonId` &rarr;
+`InfectionState`. The transmission manager would simulate a contact
+as follows:
+
+* Draw a random integer *R* in the range *[1..N]*, excluding the
+  infected person.
+* Retrieve the `InfectionState` data container from the context.
+* Check the infection state of `InfectionState[R]` and if
+  its `Susceptible`, infect them.
+
+
 
 
 
