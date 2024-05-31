@@ -10,8 +10,6 @@ approach is applicable in a wide array of circumstances.
 
 ## Overall Architecture
 
-<!-- Need a new term for module -->
-
 The central object of an Eosim simulation is the `Context`, which is
 responsible for managing all the behavior of the simulation.
 All of the simulation specific logic is embedded in modules
@@ -103,7 +101,8 @@ in practice:
 
 * It creates issues with the Rust data ownership model.
 
-* [TODO: others?]
+ * It complicates dependencies between different types of data and
+   managing side effects of mutation
 
 In Eosim, modules store data in *data containers* which are attached
 to the `Context` rather than a module object (indeed, modules don't
@@ -117,10 +116,10 @@ container which is a map of`PersonId` &rarr;
 `InfectionState`. The transmission manager would simulate a contact
 as follows:
 
-* Draw a random integer *R* in the range *[1..N]*, excluding the
+* Draw a random integer *K* in the range *[1..N]*, excluding the
   infected person.
 * Retrieve the `InfectionState` data container from the context.
-* Check the infection state of `InfectionState[R]` and if
+* Check the infection state of `InfectionState[K]` and if
   its `Susceptible`, infect them.
 
 
@@ -175,7 +174,7 @@ let b = context.get_global_property_value::<PropertyB>().unwrap();
 ```
 
 The somewhat confusing Rust "turbofish" ::&lt;&gt; construction
-is an artifact of the way that global properties are stored. Specifically,
+is an artifact of the way that global properties are defined. Specifically,
 each property is associated with a Rust type, which is also the
 lookup key for the property. So in this case, we are retrieving
 the value associated with the type `PropertyB` which will also
@@ -229,10 +228,11 @@ is generally not desirable to work out a detailed list
 of actions for each subject well in advance, as conditions
 may change rendering that planning obsolete.
 
-It is possible to schedule two `Plan`s for the same execution
-time. In this case, Eosim will run them in the order scheduled;
-in the future we might provide mechanisms to break this kind
-of tie.
+It is possible to schedule two `Plan`s for the same execution time. In
+this case, Eosim will run them in the order scheduled; in the future
+we might provide mechanisms to provide mechanisms to control priority
+of events that are scheduled for the same time.
+
 
 ### Canceling Plans
 
@@ -254,11 +254,18 @@ in a `DataContainer`.
 ### Immediate Callbacks
 
 It is also possible to schedule a callback to happen immediately.
-This works the same as scheduling a `Plan`, except that you
-don't need to supply an execution time and the scheduling
-function doesn't return a `PlanId`. A callback scheduled this
-way will fire *before* the next scheduled `Plan` even if that
-`Plan` is scheduled for the current time.
+A common use case for this is when a `Plan` has some side effect
+that you want processed immediately. For instance, suppose
+we have one component that manages infections and another
+that manages recovery from infection. When the infection manager
+infects Alice, we need to notify the recovery manager to plan
+her recovery.
+
+Immediate callbacks work the same as scheduling a `Plan`, except that
+you don't need to supply an execution time and the scheduling function
+doesn't return a `PlanId`. A callback scheduled this way will fire
+*before* the next scheduled `Plan` even if that `Plan` is scheduled
+for the current time.
 
 For instance, suppose that plan **A** and **B** are both scheduled to
 run at time 1.005. If **A** runs first and schedules a callback **C**
