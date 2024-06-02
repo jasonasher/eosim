@@ -35,7 +35,7 @@ impl VecDataContainer {
     pub fn get_value<K: PropertyWithDefault>(&self, index: usize) -> K::Value {
         match self.data.get(&TypeId::of::<K>()) {
             Some(boxed_vec) => {
-                let vec = &boxed_vec.downcast_ref::<Vec<K::Value>>().unwrap();
+                let vec = boxed_vec.downcast_ref::<Vec<K::Value>>().unwrap();
                 if index >= vec.len() {
                     K::get_default()
                 } else {
