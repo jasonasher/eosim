@@ -87,7 +87,7 @@ impl RandomContext for Context {
 #[cfg(test)]
 mod test {
     use crate::context::Context;
-    use crate::random::{RandomContext, RandomId};
+    use crate::random::RandomContext;
     use rand::RngCore;
 
     define_random_id!(RandomIdOne);
