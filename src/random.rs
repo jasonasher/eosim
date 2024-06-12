@@ -4,9 +4,26 @@ use std::any::{Any, TypeId};
 use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
 
+#[macro_export]
+macro_rules! define_random_id {
+    ($random_id:ident) => {
+        struct $random_id {}
+
+        impl $crate::random::RandomId for $random_id {
+            type RngType = rand::rngs::StdRng;
+
+            fn get_name() -> &'static str {
+                stringify!($random_id)
+            }
+        }
+    };
+}
+pub use define_random_id;
+
 pub trait RandomId: Any {
     type RngType: SeedableRng;
-    fn seed_offset() -> u64;
+
+    fn get_name() -> &'static str;
 }
 
 struct RandomHolder {
@@ -48,16 +65,17 @@ impl RandomContext for Context {
         let data_container = self.get_data_container::<RandomPlugin>().unwrap();
         let base_seed = data_container.base_seed;
         let random_holders = data_container.random_holders.try_borrow_mut().unwrap();
+        let seed_offset = fxhash::hash64(R::get_name());
         let mut random_holder = RefMut::map(random_holders, |random_holders| {
             random_holders
                 .entry(TypeId::of::<R>())
                 .or_insert_with(|| RandomHolder {
-                    rng: Box::new(R::RngType::seed_from_u64(base_seed + R::seed_offset())),
+                    rng: Box::new(R::RngType::seed_from_u64(base_seed + seed_offset)),
                     reseed: false,
                 })
         });
         if random_holder.reseed {
-            random_holder.rng = Box::new(R::RngType::seed_from_u64(base_seed + R::seed_offset()));
+            random_holder.rng = Box::new(R::RngType::seed_from_u64(base_seed + seed_offset));
             random_holder.reseed = false;
         }
         RefMut::map(random_holder, |random_holder| {
@@ -70,26 +88,10 @@ impl RandomContext for Context {
 mod test {
     use crate::context::Context;
     use crate::random::{RandomContext, RandomId};
-    use rand::rngs::StdRng;
     use rand::RngCore;
 
-    struct RandomIdOne {}
-    impl RandomId for RandomIdOne {
-        type RngType = StdRng;
-
-        fn seed_offset() -> u64 {
-            1
-        }
-    }
-
-    struct RandomIdTwo {}
-    impl RandomId for RandomIdTwo {
-        type RngType = StdRng;
-
-        fn seed_offset() -> u64 {
-            2
-        }
-    }
+    define_random_id!(RandomIdOne);
+    define_random_id!(RandomIdTwo);
 
     #[test]
     fn test() {
