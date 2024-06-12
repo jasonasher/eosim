@@ -9,7 +9,7 @@ macro_rules! define_random_id {
     ($random_id:ident) => {
         struct $random_id {}
 
-        impl RandomId for $random_id {
+        impl $crate::random::RandomId for $random_id {
             type RngType = rand::rngs::StdRng;
 
             fn get_name() -> &'static str {
@@ -18,6 +18,7 @@ macro_rules! define_random_id {
         }
     };
 }
+pub use define_random_id;
 
 pub trait RandomId: Any {
     type RngType: SeedableRng;
