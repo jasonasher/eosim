@@ -1,6 +1,5 @@
-use std::any::{Any, TypeId};
+use std::any::TypeId;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::context::Context;
 use crate::data_containers::vector_heterogeneous_container::VecDataContainer;
@@ -54,7 +53,6 @@ pub use define_person_property_from_enum;
 
 struct PersonPropertyDataContainer {
     person_property_container: VecDataContainer,
-    person_property_change_callbacks: HashMap<TypeId, Box<dyn Any>>,
     partition_update_callback_providers:
         HashMap<TypeId, HashMap<TypeId, Box<PartitionUpdateCallbackProvider>>>,
 }
@@ -64,13 +62,22 @@ crate::context::define_plugin!(
     PersonPropertyDataContainer,
     PersonPropertyDataContainer {
         person_property_container: VecDataContainer::new(),
-        person_property_change_callbacks: HashMap::new(),
         partition_update_callback_providers: HashMap::new(),
     }
 );
 
-type ContextCallback = dyn FnOnce(&mut Context);
-type PersonPropertyChangeCallback<T> = dyn Fn(&mut Context, PersonId, T);
+#[allow(clippy::manual_non_exhaustive)]
+pub struct PersonPropertyChangeEvent<T: PersonProperty> {
+    pub person_id: PersonId,
+    pub old_value: T::Value,
+    _private: (),
+}
+impl<T: PersonProperty> Copy for PersonPropertyChangeEvent<T> {}
+impl<T: PersonProperty> Clone for PersonPropertyChangeEvent<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
 
 pub trait PersonPropertyContext {
     fn get_person_property_value<T: PersonProperty>(&self, person_id: PersonId) -> T::Value;
@@ -110,28 +117,8 @@ impl PersonPropertyContext for Context {
         person_id: PersonId,
         value: T::Value,
     ) {
-        let mut callbacks_to_add = Vec::<Box<ContextCallback>>::new();
         let mut partition_callbacks = Vec::new();
         if let Some(data_container) = self.get_data_container::<PersonPropertyPlugin>() {
-            // Observation callbacks
-            let callback_vec = data_container
-                .person_property_change_callbacks
-                .get(&TypeId::of::<T>());
-            if callback_vec.is_some() {
-                let callback_vec: &Vec<Rc<PersonPropertyChangeCallback<T::Value>>> =
-                    callback_vec.unwrap().downcast_ref().unwrap();
-                if !callback_vec.is_empty() {
-                    let current_value = data_container
-                        .person_property_container
-                        .get_value::<T>(person_id.id);
-                    for callback in callback_vec {
-                        let internal_callback = Rc::clone(callback);
-                        callbacks_to_add.push(Box::new(move |context| {
-                            internal_callback(context, person_id, current_value)
-                        }));
-                    }
-                }
-            }
             // Partition callbacks
             let partition_callback_map = data_container
                 .partition_update_callback_providers
@@ -145,11 +132,19 @@ impl PersonPropertyContext for Context {
             }
         }
 
-        for callback in callbacks_to_add {
-            self.queue_callback(callback);
-        }
-
         let data_container = self.get_data_container_mut::<PersonPropertyPlugin>();
+
+        // Build event signaling person property has changed
+        let current_value = data_container
+            .person_property_container
+            .get_value::<T>(person_id.id);
+        let change_event: PersonPropertyChangeEvent<T> = PersonPropertyChangeEvent {
+            person_id,
+            old_value: current_value,
+            _private: (),
+        };
+
+        // Record new property value
         data_container
             .person_property_container
             .set_value::<T>(person_id.id, value);
@@ -158,20 +153,18 @@ impl PersonPropertyContext for Context {
         for partition_callback in partition_callbacks {
             partition_callback(self)
         }
+
+        // Release event
+        self.release_event(change_event)
     }
 
     fn observe_person_property_changes<T: PersonProperty>(
         &mut self,
         callback: impl Fn(&mut Context, PersonId, T::Value) + 'static,
     ) {
-        let data_container = self.get_data_container_mut::<PersonPropertyPlugin>();
-        let callback_vec = data_container
-            .person_property_change_callbacks
-            .entry(TypeId::of::<T>())
-            .or_insert_with(|| Box::<Vec<Rc<PersonPropertyChangeCallback<T::Value>>>>::default());
-        let callback_vec: &mut Vec<Rc<PersonPropertyChangeCallback<T::Value>>> =
-            callback_vec.downcast_mut().unwrap();
-        callback_vec.push(Rc::new(callback));
+        self.subscribe_to_event::<PersonPropertyChangeEvent<T>>(move |context, event| {
+            callback(context, event.person_id, event.old_value)
+        });
     }
 
     fn add_person_property_partition_callback<T: PersonProperty, K: Partition>(
