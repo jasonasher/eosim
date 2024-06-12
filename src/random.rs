@@ -16,7 +16,7 @@ macro_rules! define_random_id {
                 stringify!($random_id)
             }
         }
-    }
+    };
 }
 
 pub trait RandomId: Any {
