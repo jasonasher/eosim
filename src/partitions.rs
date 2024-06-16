@@ -4,6 +4,8 @@ use crate::context::Context;
 use crate::data_containers::indexset_person_container::IndexSetPersonContainer;
 use crate::data_containers::PersonContainer;
 use crate::people::{PeopleContext, PersonId};
+use crate::person_properties::{PersonProperty, PersonPropertyChangeEvent};
+use crate::regions::{PersonRegionChangeEvent, RegionId};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -16,16 +18,6 @@ pub type PartitionUpdateCallbackProvider =
 
 pub trait Partition: Any {
     type LabelType: Any + Hash + Eq + Copy;
-
-    fn get_update_callback_provider() -> impl (Fn(&Context, PersonId) -> Box<dyn Fn(&mut Context)>)
-    where
-        Self: Sized,
-    {
-        |context, person_id| {
-            let current_label = context.get_partition_label::<Self>(person_id);
-            Box::new(move |context| context.reevaluate_person::<Self>(person_id, current_label))
-        }
-    }
 }
 
 pub struct PartitionSpecification<T: Any + Hash + Eq> {
@@ -192,7 +184,12 @@ trait InternalPartitionContext {
         specification: PartitionSpecification<P::LabelType>,
     );
 
-    fn reevaluate_person<P: Partition>(&mut self, person_id: PersonId, old_label: P::LabelType);
+    fn move_person<P: Partition>(
+        &mut self,
+        person_id: PersonId,
+        old_label: P::LabelType,
+        new_label: P::LabelType,
+    );
 
     fn handle_person_creation<P: Partition>(&mut self, person_id: PersonId);
 }
@@ -232,44 +229,40 @@ impl InternalPartitionContext for Context {
             .insert(TypeId::of::<P>(), Box::new(partition_data));
     }
 
-    fn reevaluate_person<P: Partition>(&mut self, person_id: PersonId, old_label: P::LabelType) {
-        let data_container = self.get_data_container::<PartitionPlugin>().unwrap();
-        let partition_data = data_container.partition_map.get(&TypeId::of::<P>());
-        if partition_data.is_none() {
-            panic!("Partition not registered in Context");
-        }
-        let partition_data = partition_data
-            .unwrap()
-            .downcast_ref::<PartitionData<P::LabelType>>()
-            .expect("Partition data of wrong type");
-        let new_label = (*partition_data.label_function)(self, person_id);
-
-        let data_container = self.get_data_container_mut::<PartitionPlugin>();
-        let partition_data = data_container.partition_map.get_mut(&TypeId::of::<P>());
-        match partition_data {
-            None => panic!("Unreachable"),
-            Some(partition_data) => {
-                let partition_data = partition_data
-                    .downcast_mut::<PartitionData<P::LabelType>>()
-                    .unwrap();
-                let old_label_people_container = partition_data.label_map.get_mut(&old_label);
-                match old_label_people_container {
-                    None => panic!("Old partition label is incorrect"),
-                    Some(old_label_people_container) => {
-                        if old_label_people_container.contains(&person_id) {
-                            old_label_people_container.remove(&person_id);
-                        } else {
-                            panic!("Old partition label is incorrect");
+    fn move_person<P: Partition>(
+        &mut self,
+        person_id: PersonId,
+        old_label: P::LabelType,
+        new_label: P::LabelType,
+    ) {
+        if new_label != old_label {
+            let data_container = self.get_data_container_mut::<PartitionPlugin>();
+            let partition_data = data_container.partition_map.get_mut(&TypeId::of::<P>());
+            match partition_data {
+                None => panic!("Unreachable"),
+                Some(partition_data) => {
+                    let partition_data = partition_data
+                        .downcast_mut::<PartitionData<P::LabelType>>()
+                        .unwrap();
+                    let old_label_people_container = partition_data.label_map.get_mut(&old_label);
+                    match old_label_people_container {
+                        None => panic!("Old partition label is incorrect"),
+                        Some(old_label_people_container) => {
+                            if old_label_people_container.contains(&person_id) {
+                                old_label_people_container.remove(&person_id);
+                            } else {
+                                panic!("Old partition label is incorrect");
+                            }
                         }
                     }
+                    let new_label_people_container = partition_data
+                        .label_map
+                        .entry(new_label)
+                        .or_insert(IndexSetPersonContainer::new());
+                    new_label_people_container.insert(person_id);
                 }
-                let new_label_people_container = partition_data
-                    .label_map
-                    .entry(new_label)
-                    .or_insert(IndexSetPersonContainer::new());
-                new_label_people_container.insert(person_id);
-            }
-        }
+            };
+        };
     }
 
     fn handle_person_creation<P: Partition>(&mut self, person_id: PersonId) {
@@ -302,14 +295,72 @@ impl InternalPartitionContext for Context {
     }
 }
 
+pub trait PersonPropertyPartitionBuilder<'a, P: Partition> {
+    fn add_person_property_sensitivity<T: PersonProperty>(
+        self,
+        label_modifier: impl Fn(&P::LabelType, T::Value) -> P::LabelType + 'static,
+    ) -> PartitionBuilder<'a, P>;
+}
+
+impl<'a, P: Partition> PersonPropertyPartitionBuilder<'a, P> for PartitionBuilder<'a, P> {
+    fn add_person_property_sensitivity<T: PersonProperty>(
+        mut self,
+        label_modifier: impl Fn(&P::LabelType, T::Value) -> P::LabelType + 'static,
+    ) -> PartitionBuilder<'a, P> {
+        self.add_registration_callback(|context| {
+            context.subscribe_immediately_to_event::<PersonPropertyChangeEvent<T>>(
+                move |context, event| {
+                    let person_id = event.person_id;
+                    let new_label = context.get_partition_label::<P>(person_id);
+                    let old_label = label_modifier(&new_label, event.old_value);
+                    context.move_person::<P>(person_id, old_label, new_label);
+                },
+            );
+        });
+        self.add_deregistration_callback(|_context| {
+            // TODO: Handle Partition deregistration
+        });
+        self
+    }
+}
+
+pub trait RegionsPartitionBuilder<'a, P: Partition> {
+    fn add_region_sensitivity(
+        self,
+        label_modifier: impl Fn(&P::LabelType, RegionId) -> P::LabelType + 'static,
+    ) -> PartitionBuilder<'a, P>;
+}
+
+impl<'a, P: Partition> RegionsPartitionBuilder<'a, P> for PartitionBuilder<'a, P> {
+    fn add_region_sensitivity(
+        mut self,
+        label_modifier: impl Fn(&P::LabelType, RegionId) -> P::LabelType + 'static,
+    ) -> PartitionBuilder<'a, P> {
+        self.add_registration_callback(|context| {
+            context.subscribe_immediately_to_event::<PersonRegionChangeEvent>(
+                move |context, event| {
+                    let person_id = event.person_id;
+                    let new_label = context.get_partition_label::<P>(person_id);
+                    let old_label = label_modifier(&new_label, event.old_region_id);
+                    context.move_person::<P>(person_id, old_label, new_label);
+                },
+            );
+        });
+        self.add_deregistration_callback(|_context| {
+            // TODO: Handle Partition deregistration
+        });
+        self
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::context::Context;
     use crate::data_containers::PersonContainer;
     use crate::define_person_property;
-    use crate::partitions::{Partition, PartitionContext};
+    use crate::partitions::{Partition, PartitionContext, PersonPropertyPartitionBuilder};
     use crate::people::{PeopleContext, PersonId};
-    use crate::person_properties::{PersonPropertyContext, PersonPropertyPartitionBuilder};
+    use crate::person_properties::PersonPropertyContext;
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
     use std::collections::HashSet;
@@ -338,8 +389,16 @@ mod test {
                     context.get_person_property_value::<PropertyTwo>(person_id),
                 )
             })
-            .add_person_property_sensitivity::<PropertyOne>()
-            .add_person_property_sensitivity::<PropertyTwo>()
+            .add_person_property_sensitivity::<PropertyOne>(|label, value| {
+                let mut modified_label = *label;
+                modified_label.0 = value;
+                modified_label
+            })
+            .add_person_property_sensitivity::<PropertyTwo>(|label, value| {
+                let mut modified_label = *label;
+                modified_label.1 = value;
+                modified_label
+            })
             .execute();
 
         for _ in 0..population {

@@ -1,10 +1,6 @@
-use std::any::TypeId;
-use std::collections::HashMap;
-
 use crate::context::Context;
 use crate::data_containers::vector_heterogeneous_container::VecDataContainer;
 use crate::data_containers::PropertyWithDefault;
-use crate::partitions::{Partition, PartitionBuilder, PartitionUpdateCallbackProvider};
 use crate::people::{PersonBuilder, PersonId};
 
 pub trait PersonProperty: PropertyWithDefault {}
@@ -53,8 +49,6 @@ pub use define_person_property_from_enum;
 
 struct PersonPropertyDataContainer {
     person_property_container: VecDataContainer,
-    partition_update_callback_providers:
-        HashMap<TypeId, HashMap<TypeId, Box<PartitionUpdateCallbackProvider>>>,
 }
 
 crate::context::define_plugin!(
@@ -62,7 +56,6 @@ crate::context::define_plugin!(
     PersonPropertyDataContainer,
     PersonPropertyDataContainer {
         person_property_container: VecDataContainer::new(),
-        partition_update_callback_providers: HashMap::new(),
     }
 );
 
@@ -92,13 +85,6 @@ pub trait PersonPropertyContext {
         &mut self,
         callback: impl Fn(&mut Context, PersonId, T::Value) + 'static,
     );
-
-    fn add_person_property_partition_callback<T: PersonProperty, K: Partition>(
-        &mut self,
-        provider: impl (Fn(&Context, PersonId) -> Box<dyn Fn(&mut Context)>) + 'static,
-    );
-
-    fn remove_person_property_partition_callback<T: PersonProperty, K: Partition>(&mut self);
 }
 
 impl PersonPropertyContext for Context {
@@ -117,21 +103,6 @@ impl PersonPropertyContext for Context {
         person_id: PersonId,
         value: T::Value,
     ) {
-        let mut partition_callbacks = Vec::new();
-        if let Some(data_container) = self.get_data_container::<PersonPropertyPlugin>() {
-            // Partition callbacks
-            let partition_callback_map = data_container
-                .partition_update_callback_providers
-                .get(&TypeId::of::<T>());
-            if partition_callback_map.is_some() {
-                let partition_callback_map = partition_callback_map.unwrap();
-                for entry in partition_callback_map {
-                    let partition_update_callback = (entry.1)(self, person_id);
-                    partition_callbacks.push(partition_update_callback);
-                }
-            }
-        }
-
         let data_container = self.get_data_container_mut::<PersonPropertyPlugin>();
 
         // Build event signaling person property has changed
@@ -149,11 +120,6 @@ impl PersonPropertyContext for Context {
             .person_property_container
             .set_value::<T>(person_id.id, value);
 
-        // Update partitions
-        for partition_callback in partition_callbacks {
-            partition_callback(self)
-        }
-
         // Release event
         self.release_event(change_event)
     }
@@ -165,28 +131,6 @@ impl PersonPropertyContext for Context {
         self.subscribe_to_event::<PersonPropertyChangeEvent<T>>(move |context, event| {
             callback(context, event.person_id, event.old_value)
         });
-    }
-
-    fn add_person_property_partition_callback<T: PersonProperty, K: Partition>(
-        &mut self,
-        provider: impl (Fn(&Context, PersonId) -> Box<dyn Fn(&mut Context)>) + 'static,
-    ) {
-        let data_container = self.get_data_container_mut::<PersonPropertyPlugin>();
-        let provider_map = data_container
-            .partition_update_callback_providers
-            .entry(TypeId::of::<T>())
-            .or_default();
-        provider_map.insert(TypeId::of::<K>(), Box::new(provider));
-    }
-
-    fn remove_person_property_partition_callback<T: PersonProperty, K: Partition>(&mut self) {
-        let data_container = self.get_data_container_mut::<PersonPropertyPlugin>();
-        let provider_map = data_container
-            .partition_update_callback_providers
-            .get_mut(&TypeId::of::<T>());
-        if let Some(provider_map) = provider_map {
-            provider_map.remove(&TypeId::of::<K>());
-        }
     }
 }
 
@@ -201,23 +145,6 @@ impl<'a> PersonPropertiesPersonBuilder<'a> for PersonBuilder<'a> {
             data_container
                 .person_property_container
                 .set_value::<T>(person_id.id, value);
-        });
-        self
-    }
-}
-
-pub trait PersonPropertyPartitionBuilder<'a, P: Partition> {
-    fn add_person_property_sensitivity<T: PersonProperty>(self) -> PartitionBuilder<'a, P>;
-}
-
-impl<'a, P: Partition> PersonPropertyPartitionBuilder<'a, P> for PartitionBuilder<'a, P> {
-    fn add_person_property_sensitivity<T: PersonProperty>(mut self) -> PartitionBuilder<'a, P> {
-        self.add_registration_callback(|context| {
-            context
-                .add_person_property_partition_callback::<T, P>(P::get_update_callback_provider());
-        });
-        self.add_deregistration_callback(|context| {
-            context.remove_person_property_partition_callback::<T, P>();
         });
         self
     }
