@@ -87,6 +87,7 @@ crate::context::define_plugin!(
 #[allow(clippy::manual_non_exhaustive)]
 pub struct PersonRegionChangeEvent {
     pub person_id: PersonId,
+    pub new_region_id: RegionId,
     pub old_region_id: RegionId,
     _private: (),
 }
@@ -154,6 +155,7 @@ impl RegionsContext for Context {
         let current_region = data_container.region_map[person_id.id];
         let change_event = PersonRegionChangeEvent {
             person_id,
+            new_region_id: region_id,
             old_region_id: current_region,
             _private: (),
         };
