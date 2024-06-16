@@ -84,6 +84,46 @@ impl<'a, P: Partition> PartitionBuilder<'a, P> {
         self
     }
 
+    pub fn add_person_property_sensitivity<T: PersonProperty>(
+        mut self,
+        label_modifier: impl Fn(&P::LabelType, T::Value) -> P::LabelType + 'static,
+    ) -> PartitionBuilder<'a, P> {
+        self.add_registration_callback(|context| {
+            context.subscribe_immediately_to_event::<PersonPropertyChangeEvent<T>>(
+                move |context, event| {
+                    let person_id = event.person_id;
+                    let new_label = context.get_partition_label::<P>(person_id);
+                    let old_label = label_modifier(&new_label, event.old_value);
+                    context.move_person::<P>(person_id, old_label, new_label);
+                },
+            );
+        });
+        self.add_deregistration_callback(|_context| {
+            // TODO: Handle Partition deregistration
+        });
+        self
+    }
+
+    pub fn add_region_sensitivity(
+        mut self,
+        label_modifier: impl Fn(&P::LabelType, RegionId) -> P::LabelType + 'static,
+    ) -> PartitionBuilder<'a, P> {
+        self.add_registration_callback(|context| {
+            context.subscribe_immediately_to_event::<PersonRegionChangeEvent>(
+                move |context, event| {
+                    let person_id = event.person_id;
+                    let new_label = context.get_partition_label::<P>(person_id);
+                    let old_label = label_modifier(&new_label, event.old_region_id);
+                    context.move_person::<P>(person_id, old_label, new_label);
+                },
+            );
+        });
+        self.add_deregistration_callback(|_context| {
+            // TODO: Handle Partition deregistration
+        });
+        self
+    }
+
     pub fn add_registration_callback(&mut self, callback: impl FnOnce(&mut Context) + 'static) {
         self.registration_callbacks.push(Box::new(callback));
     }
@@ -295,70 +335,12 @@ impl InternalPartitionContext for Context {
     }
 }
 
-pub trait PersonPropertyPartitionBuilder<'a, P: Partition> {
-    fn add_person_property_sensitivity<T: PersonProperty>(
-        self,
-        label_modifier: impl Fn(&P::LabelType, T::Value) -> P::LabelType + 'static,
-    ) -> PartitionBuilder<'a, P>;
-}
-
-impl<'a, P: Partition> PersonPropertyPartitionBuilder<'a, P> for PartitionBuilder<'a, P> {
-    fn add_person_property_sensitivity<T: PersonProperty>(
-        mut self,
-        label_modifier: impl Fn(&P::LabelType, T::Value) -> P::LabelType + 'static,
-    ) -> PartitionBuilder<'a, P> {
-        self.add_registration_callback(|context| {
-            context.subscribe_immediately_to_event::<PersonPropertyChangeEvent<T>>(
-                move |context, event| {
-                    let person_id = event.person_id;
-                    let new_label = context.get_partition_label::<P>(person_id);
-                    let old_label = label_modifier(&new_label, event.old_value);
-                    context.move_person::<P>(person_id, old_label, new_label);
-                },
-            );
-        });
-        self.add_deregistration_callback(|_context| {
-            // TODO: Handle Partition deregistration
-        });
-        self
-    }
-}
-
-pub trait RegionsPartitionBuilder<'a, P: Partition> {
-    fn add_region_sensitivity(
-        self,
-        label_modifier: impl Fn(&P::LabelType, RegionId) -> P::LabelType + 'static,
-    ) -> PartitionBuilder<'a, P>;
-}
-
-impl<'a, P: Partition> RegionsPartitionBuilder<'a, P> for PartitionBuilder<'a, P> {
-    fn add_region_sensitivity(
-        mut self,
-        label_modifier: impl Fn(&P::LabelType, RegionId) -> P::LabelType + 'static,
-    ) -> PartitionBuilder<'a, P> {
-        self.add_registration_callback(|context| {
-            context.subscribe_immediately_to_event::<PersonRegionChangeEvent>(
-                move |context, event| {
-                    let person_id = event.person_id;
-                    let new_label = context.get_partition_label::<P>(person_id);
-                    let old_label = label_modifier(&new_label, event.old_region_id);
-                    context.move_person::<P>(person_id, old_label, new_label);
-                },
-            );
-        });
-        self.add_deregistration_callback(|_context| {
-            // TODO: Handle Partition deregistration
-        });
-        self
-    }
-}
-
 #[cfg(test)]
 mod test {
     use crate::context::Context;
     use crate::data_containers::PersonContainer;
     use crate::define_person_property;
-    use crate::partitions::{Partition, PartitionContext, PersonPropertyPartitionBuilder};
+    use crate::partitions::{Partition, PartitionContext};
     use crate::people::{PeopleContext, PersonId};
     use crate::person_properties::PersonPropertyContext;
     use rand::prelude::StdRng;
