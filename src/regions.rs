@@ -2,11 +2,7 @@ use crate::context::Context;
 use crate::creation::CreationBuilder;
 use crate::data_containers::vector_heterogeneous_container::VecDataContainer;
 use crate::data_containers::PropertyWithDefault;
-use crate::partitions::{Partition, PartitionBuilder, PartitionUpdateCallbackProvider};
 use crate::people::{PersonBuilder, PersonId};
-use std::any::TypeId;
-use std::collections::HashMap;
-use std::rc::Rc;
 
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Debug)]
 pub struct RegionId {
@@ -71,14 +67,11 @@ impl<'a> RegionPropertiesCreationBuilder<'a> for CreationBuilder<'a, RegionId> {
     }
 }
 
-type RegionUpdateCallback = dyn Fn(&mut Context, PersonId, RegionId);
 struct RegionsDataContainer {
     max_region_id: Option<RegionId>,
     // Maps person by PersonId to RegionId
     region_map: Vec<RegionId>,
     region_property_container: VecDataContainer,
-    region_change_callbacks: Vec<Rc<RegionUpdateCallback>>,
-    partition_update_callback_providers: HashMap<TypeId, Box<PartitionUpdateCallbackProvider>>,
 }
 
 crate::context::define_plugin!(
@@ -87,11 +80,22 @@ crate::context::define_plugin!(
     RegionsDataContainer {
         max_region_id: None,
         region_map: Vec::new(),
-        region_property_container: VecDataContainer::new(),
-        region_change_callbacks: Vec::new(),
-        partition_update_callback_providers: HashMap::new(),
+        region_property_container: VecDataContainer::new()
     }
 );
+
+#[allow(clippy::manual_non_exhaustive)]
+pub struct PersonRegionChangeEvent {
+    pub person_id: PersonId,
+    pub old_region_id: RegionId,
+    _private: (),
+}
+impl Copy for PersonRegionChangeEvent {}
+impl Clone for PersonRegionChangeEvent {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
 
 pub trait RegionsContext {
     fn add_region(&mut self) -> CreationBuilder<RegionId>;
@@ -114,13 +118,6 @@ pub trait RegionsContext {
         &mut self,
         callback: impl Fn(&mut Context, PersonId, RegionId) + 'static,
     );
-
-    fn add_region_partition_callback<K: Partition>(
-        &mut self,
-        provider: impl (Fn(&Context, PersonId) -> Box<dyn Fn(&mut Context)>) + 'static,
-    );
-
-    fn remove_region_partition_callback<K: Partition>(&mut self);
 }
 
 impl RegionsContext for Context {
@@ -147,43 +144,25 @@ impl RegionsContext for Context {
     }
 
     fn set_person_region(&mut self, person_id: PersonId, region_id: RegionId) {
-        let mut observation_callbacks = Vec::<Box<dyn Fn(&mut Context) + 'static>>::new();
-        let mut partition_callbacks = Vec::new();
-        // If data container is not loaded then there are no observers
-        if let Some(data_container) = self.get_data_container::<RegionsPlugin>() {
-            if person_id.id >= data_container.region_map.len() {
-                panic!("Person hasn't been assigned a region")
-            }
-            // Observation callbacks
-            if !data_container.region_change_callbacks.is_empty() {
-                let current_region_id = data_container.region_map[person_id.id];
-                for callback in &data_container.region_change_callbacks {
-                    let internal_callback = Rc::clone(callback);
-                    observation_callbacks.push(Box::new(move |context| {
-                        (*internal_callback)(context, person_id, current_region_id)
-                    }))
-                }
-            }
-            // Partition callbacks
-            for entry in &data_container.partition_update_callback_providers {
-                let partition_update_callback = (entry.1)(self, person_id);
-                partition_callbacks.push(partition_update_callback);
-            }
-        }
-
-        // Add observation callbacks
-        for callback in observation_callbacks {
-            self.queue_callback(callback);
-        }
-
-        // Update value
         let data_container = self.get_data_container_mut::<RegionsPlugin>();
+
+        if person_id.id >= data_container.region_map.len() {
+            panic!("Person hasn't been assigned a region")
+        }
+
+        // Build event signaling region has changed
+        let current_region = data_container.region_map[person_id.id];
+        let change_event = PersonRegionChangeEvent {
+            person_id,
+            old_region_id: current_region,
+            _private: (),
+        };
+
+        // Record new region
         data_container.region_map[person_id.id] = region_id;
 
-        // Update partitions
-        for partition_callback in partition_callbacks {
-            partition_callback(self)
-        }
+        // Release event
+        self.release_event(change_event);
     }
 
     fn get_region_property_value<T: RegionProperty>(&self, region_id: RegionId) -> T::Value {
@@ -211,27 +190,9 @@ impl RegionsContext for Context {
         &mut self,
         callback: impl Fn(&mut Context, PersonId, RegionId) + 'static,
     ) {
-        let data_container = self.get_data_container_mut::<RegionsPlugin>();
-        data_container
-            .region_change_callbacks
-            .push(Rc::new(callback));
-    }
-
-    fn add_region_partition_callback<K: Partition>(
-        &mut self,
-        provider: impl (Fn(&Context, PersonId) -> Box<dyn Fn(&mut Context)>) + 'static,
-    ) {
-        let data_container = self.get_data_container_mut::<RegionsPlugin>();
-        data_container
-            .partition_update_callback_providers
-            .insert(TypeId::of::<K>(), Box::new(provider));
-    }
-
-    fn remove_region_partition_callback<K: Partition>(&mut self) {
-        let data_container = self.get_data_container_mut::<RegionsPlugin>();
-        data_container
-            .partition_update_callback_providers
-            .remove(&TypeId::of::<K>());
+        self.subscribe_to_event::<PersonRegionChangeEvent>(move |context, event| {
+            callback(context, event.person_id, event.old_region_id);
+        })
     }
 }
 
@@ -253,31 +214,14 @@ impl<'a> RegionsPersonBuilder<'a> for PersonBuilder<'a> {
     }
 }
 
-pub trait RegionsPartitionBuilder<'a, P: Partition> {
-    fn add_region_sensitivity(self) -> PartitionBuilder<'a, P>;
-}
-
-impl<'a, P: Partition> RegionsPartitionBuilder<'a, P> for PartitionBuilder<'a, P> {
-    fn add_region_sensitivity(mut self) -> PartitionBuilder<'a, P> {
-        self.add_registration_callback(|context| {
-            context.add_region_partition_callback::<P>(P::get_update_callback_provider());
-        });
-        self.add_deregistration_callback(|context| {
-            context.remove_region_partition_callback::<P>();
-        });
-        self
-    }
-}
-
 #[cfg(test)]
 mod test {
     use crate::context::{Component, Context};
     use crate::data_containers::PersonContainer;
-    use crate::partitions::{Partition, PartitionContext};
+    use crate::partitions::{Partition, PartitionContext, RegionsPartitionBuilder};
     use crate::people::PeopleContext;
     use crate::regions::{
-        RegionId, RegionPropertiesCreationBuilder, RegionsContext, RegionsPartitionBuilder,
-        RegionsPersonBuilder,
+        RegionId, RegionPropertiesCreationBuilder, RegionsContext, RegionsPersonBuilder,
     };
 
     define_region_property!(RegionPropertyA, f64, 0.0);
@@ -339,7 +283,7 @@ mod test {
         context
             .add_partition::<PartitionOneKey>()
             .set_label_function(|context, person_id| context.get_person_region(person_id))
-            .add_region_sensitivity()
+            .add_region_sensitivity(|_region, new_region| new_region)
             .execute();
 
         let region_zero = context.add_region().execute();
