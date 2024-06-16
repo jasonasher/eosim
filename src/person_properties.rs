@@ -62,6 +62,7 @@ crate::context::define_plugin!(
 #[allow(clippy::manual_non_exhaustive)]
 pub struct PersonPropertyChangeEvent<T: PersonProperty> {
     pub person_id: PersonId,
+    pub new_value: T::Value,
     pub old_value: T::Value,
     _private: (),
 }
@@ -111,6 +112,7 @@ impl PersonPropertyContext for Context {
             .get_value::<T>(person_id.id);
         let change_event: PersonPropertyChangeEvent<T> = PersonPropertyChangeEvent {
             person_id,
+            new_value: value,
             old_value: current_value,
             _private: (),
         };
