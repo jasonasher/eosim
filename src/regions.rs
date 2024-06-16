@@ -218,7 +218,7 @@ impl<'a> RegionsPersonBuilder<'a> for PersonBuilder<'a> {
 mod test {
     use crate::context::{Component, Context};
     use crate::data_containers::PersonContainer;
-    use crate::partitions::{Partition, PartitionContext, RegionsPartitionBuilder};
+    use crate::partitions::{Partition, PartitionContext};
     use crate::people::PeopleContext;
     use crate::regions::{
         RegionId, RegionPropertiesCreationBuilder, RegionsContext, RegionsPersonBuilder,
