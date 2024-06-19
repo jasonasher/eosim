@@ -4,7 +4,7 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io;
-use std::sync::mpsc::Sender;
+use tokio::sync::mpsc::Sender;
 
 pub trait Report: Any {
     type Item;
@@ -101,11 +101,11 @@ pub fn get_channel_report_handler<T: Report, S>(
     id: S,
 ) -> impl FnMut(T::Item) + 'static
 where
-    T::Item: Serialize + Send,
+    T::Item: Serialize + Send + 'static,
     S: Serialize + Send + Copy + 'static,
 {
     move |item| {
-        if let Err(e) = sender.send((id, item)) {
+        if let Err(e) = sender.try_send((id, item)) {
             eprintln!("{}", e);
         }
     }
