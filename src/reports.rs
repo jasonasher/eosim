@@ -106,7 +106,7 @@ where
 {
     move |item| {
         if let Err(e) = sender.try_send((id, item)) {
-            eprintln!("{}", e);
+            panic!("Failed to send item: {:?}", e);
         }
     }
 }
