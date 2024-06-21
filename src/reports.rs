@@ -119,9 +119,9 @@ mod test {
     };
     use serde_derive::Serialize;
     use std::io::{Read, Seek};
+    use tempfile::tempfile;
     use tokio::sync::mpsc;
     use tokio::task;
-    use tempfile::tempfile;
 
     crate::context::define_plugin!(TestReport, (), ());
 
