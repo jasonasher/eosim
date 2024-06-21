@@ -4,7 +4,7 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io;
-use std::sync::mpsc::Sender;
+use tokio::sync::mpsc::Sender;
 
 pub trait Report: Any {
     type Item;
@@ -101,12 +101,12 @@ pub fn get_channel_report_handler<T: Report, S>(
     id: S,
 ) -> impl FnMut(T::Item) + 'static
 where
-    T::Item: Serialize + Send,
+    T::Item: Serialize + Send + 'static,
     S: Serialize + Send + Copy + 'static,
 {
     move |item| {
-        if let Err(e) = sender.send((id, item)) {
-            eprintln!("{}", e);
+        if let Err(e) = sender.try_send((id, item)) {
+            panic!("Failed to send item: {:?}", e);
         }
     }
 }
@@ -119,9 +119,9 @@ mod test {
     };
     use serde_derive::Serialize;
     use std::io::{Read, Seek};
-    use std::sync::mpsc::channel;
-    use std::thread;
     use tempfile::tempfile;
+    use tokio::sync::mpsc;
+    use tokio::task;
 
     crate::context::define_plugin!(TestReport, (), ());
 
@@ -147,8 +147,8 @@ mod test {
         context.release_report_item::<TestReport>(TestItem { a: 2, b: true });
     }
 
-    #[test]
-    fn test() {
+    #[tokio::test]
+    async fn test() {
         let mut context = Context::new();
         let output_file = tempfile().unwrap();
         context.set_report_item_handler::<TestReport>(get_file_report_handler::<TestReport>(
@@ -165,13 +165,13 @@ mod test {
         assert_eq!(string, "a,b\n23,true\n29,false\n2,true\n");
 
         // Threaded version
-        let (sender, receiver) = channel();
+        let (sender, mut receiver) = mpsc::channel(100);
         let replication_data = ReplicationData {
             scenario: 0,
             replication: 0,
         };
         // Release reports in a thread
-        let handle = thread::spawn(move || {
+        let handle = task::spawn(async move {
             let mut context = Context::new();
             context.set_report_item_handler::<TestReport>(get_channel_report_handler::<
                 TestReport,
@@ -181,10 +181,10 @@ mod test {
         });
 
         let mut writer = csv::Writer::from_writer(vec![]);
-        for item in receiver.iter() {
+        while let Some(item) = receiver.recv().await {
             writer.serialize(item).unwrap();
         }
-        handle.join().unwrap();
+        handle.await.unwrap();
         let output = String::from_utf8(writer.into_inner().unwrap()).unwrap();
         assert_eq!(
             output,
