@@ -79,7 +79,7 @@ where
     let mut writer = csv::Writer::from_writer(io::stdout());
     move |item| {
         if let Err(e) = writer.serialize(item) {
-            eprintln!("{}", e);
+            panic!("Failed to serialize report item: {:?}", e);
         }
     }
 }
@@ -91,7 +91,7 @@ where
     let mut writer = csv::Writer::from_writer(file);
     move |item| {
         if let Err(e) = writer.serialize(item) {
-            eprintln!("{}", e);
+            panic!("Failed to serialize report item: {:?}", e);
         }
     }
 }
@@ -106,7 +106,7 @@ where
 {
     move |item| {
         if let Err(e) = sender.try_send((id, item)) {
-            panic!("Failed to send item: {:?}", e);
+            panic!("Failed to send report item: {:?}", e);
         }
     }
 }
