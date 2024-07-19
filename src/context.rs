@@ -50,7 +50,7 @@ impl Ord for TimedPlan {
         let time_ordering = self.time.partial_cmp(&other.time).unwrap().reverse();
         if time_ordering == Ordering::Equal {
             // Break time ties in order of plan id
-            self.plan_id.cmp(&other.plan_id)
+            self.plan_id.cmp(&other.plan_id).reverse()
         } else {
             time_ordering
         }
